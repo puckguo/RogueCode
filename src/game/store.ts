@@ -36,10 +36,10 @@ function persist(s: SaveData) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(s));
 }
 
-function rollItem(ilvl: number, magicFind: number): Item {
+function rollItem(ilvl: number, magicFind: number, forceRarity?: Rarity): Item {
   const slots: Item["slot"][] = ["weapon", "armor", "helm", "boots", "ring", "amulet"];
   const slot = slots[Math.floor(Math.random() * slots.length)];
-  const rarity: Rarity = rollRarity(magicFind);
+  const rarity: Rarity = forceRarity || rollRarity(magicFind);
   const count = RARITY_AFFIX_COUNT[rarity];
   const affixes = Array.from({ length: count }).map(() => AFFIX_POOL[Math.floor(Math.random() * AFFIX_POOL.length)]);
   const namePool = ITEM_NAMES[slot] || ["Trinket"];
