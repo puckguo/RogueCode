@@ -97,6 +97,11 @@ type State = {
   totalPoints: number;
   stash: Item[];
 
+  // Coding-behavior hooks
+  nextDropLegendary: boolean;
+  recentEvents: { ts: number; text: string }[];
+  runSummary: null | { wave: number; shards: number; points: number; events: string[] };
+
   // Actions
   setCliStatus: (s: CliStatus) => void;
   appendCliOutput: (chunk: string) => void;
@@ -112,8 +117,11 @@ type State = {
   takeItemReward: () => void;
   equipItem: (id: string) => void;
   salvageItem: (id: string) => void;
+  stashItem: (id: string) => void;
+  withdrawStash: (id: string) => void;
   spendTalent: (id: string) => void;
   refundAllTalents: () => void;
+  dismissRunSummary: () => void;
 
   tick: () => void;
   winWave: () => void;
