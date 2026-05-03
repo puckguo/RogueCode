@@ -594,3 +594,38 @@ export const useGame = create<State>()((set, get) => {
     },
   } as any;
 });
+
+// ----- Markdown bootstrap -----
+// Write the AI skill guide and hydrate from save.md if it exists.
+void writeSkillMd();
+void (async () => {
+  const md = await readSaveMd();
+  if (md) {
+    useGame.setState({
+      shards: md.shards ?? 0,
+      talentRanks: md.talentRanks ?? {},
+      totalPoints: md.totalPoints ?? 0,
+      stash: md.stash ?? [],
+    });
+  }
+})();
+
+// Periodically mirror the live game state to state.md and flush log.md
+if (typeof window !== "undefined") {
+  setInterval(() => {
+    const s = useGame.getState();
+    void writeStateMd({
+      inRun: s.inRun,
+      wave: s.wave,
+      hp: s.player.hp,
+      maxHp: s.player.maxHp,
+      combo: s.combo,
+      cliStatus: s.cliStatus,
+      enemies: s.enemies.map((e) => ({ name: e.name, hp: e.hp, maxHp: e.maxHp })),
+      inventory: s.inventory,
+      equipment: s.equipment as Record<string, Item | undefined>,
+      recentEvents: s.recentEvents.map((e) => e.text),
+    });
+    void appendLogMd(s.log);
+  }, 3000);
+}
