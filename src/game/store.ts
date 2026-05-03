@@ -10,6 +10,7 @@ import {
   rollRarity,
   RARITY_AFFIX_COUNT,
 } from "./data";
+import { writeSaveMd, readSaveMd, writeSkillMd, writeStateMd, appendLogMd } from "./mdStorage";
 
 const STORAGE_KEY = "codequest_save_v1";
 
@@ -32,8 +33,11 @@ function loadSave(): SaveData {
 }
 
 function persist(s: SaveData) {
-  if (typeof localStorage === "undefined") return;
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(s));
+  if (typeof localStorage !== "undefined") {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(s));
+  }
+  // Mirror to markdown file (Electron ~/.codequest/save.md, browser localStorage).
+  void writeSaveMd(s);
 }
 
 function rollItem(ilvl: number, magicFind: number, forceRarity?: Rarity): Item {
