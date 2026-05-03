@@ -184,6 +184,10 @@ export const useGame = create<State>()((set, get) => {
     totalPoints: save.totalPoints,
     stash: save.stash,
 
+    nextDropLegendary: false,
+    recentEvents: [],
+    runSummary: null,
+
     setCliStatus: (s: CliStatus) => {
       const prev = get().cliStatus;
       if (prev === s) return;
@@ -192,14 +196,71 @@ export const useGame = create<State>()((set, get) => {
         set({ log: [...get().log, "▶ AI streaming — battle resumes"] });
       }
       if (s === "IDLE_WAITING") {
-        set({ log: [...get().log, "⏸ AI idle — talk to your AI to resume"] });
+        // reset combo on long idle
+        set({
+          log: [...get().log, "⏸ AI idle — talk to your AI to resume"],
+          combo: 0,
+          comboTimer: 0,
+        });
       }
     },
     appendCliOutput: (chunk: string) => {
-      set({ cliBuffer: (get().cliBuffer + chunk).slice(-4000) });
-      if (get().cliStatus === "STREAMING") {
-        set({ comboTimer: get().comboTimer + chunk.length });
+      const s = get();
+      const buf = (s.cliBuffer + chunk).slice(-8000);
+      let combo = s.combo;
+      let comboTimer = s.comboTimer;
+      const events = [...s.recentEvents];
+      let nextDropLegendary = s.nextDropLegendary;
+      const log = [...s.log];
+
+      if (s.cliStatus === "STREAMING") {
+        comboTimer += chunk.length;
+        // every ~600 chars of streamed output = +1 combo
+        const newCombo = Math.floor(comboTimer / 600);
+        if (newCombo > combo) {
+          combo = newCombo;
+          log.push(`✦ Combo ×${combo} — magic find boosted`);
+        }
       }
+
+      // pattern hooks on the rolling buffer
+      const hooks: { re: RegExp; text: string; effect: () => void }[] = [
+        {
+          re: /\b(commit|committed)\b.*?\b[a-f0-9]{7,}\b/i,
+          text: "Git commit detected → next loot guaranteed Legendary!",
+          effect: () => { nextDropLegendary = true; },
+        },
+        {
+          re: /(✓|PASS|passed|all tests pass|tests? passed)/,
+          text: "Tests passing → +5 ether shards",
+          effect: () => { set({ shards: get().shards + 5 }); },
+        },
+        {
+          re: /\b(error|Error|FAIL|failed|Traceback)\b/,
+          text: "AI hit an error — enemies enraged (+1 ATK)",
+          effect: () => {
+            set({ enemies: get().enemies.map((e) => ({ ...e, atk: e.atk + 1, intent: e.intent + 1 })) });
+          },
+        },
+      ];
+      // only fire each hook once per ~5s window
+      const now = Date.now();
+      for (const h of hooks) {
+        const fired = events.find((e) => e.text === h.text && now - e.ts < 5000);
+        if (!fired && h.re.test(buf.slice(-400))) {
+          h.effect();
+          events.push({ ts: now, text: h.text });
+          log.push(`⚡ ${h.text}`);
+        }
+      }
+
+      set({
+        cliBuffer: buf,
+        combo, comboTimer,
+        recentEvents: events.filter((e) => now - e.ts < 30000),
+        nextDropLegendary,
+        log: log.slice(-40),
+      });
     },
     setTokensPerSec: (n: number) => set({ tokensPerSec: n }),
     setPendingPrompt: (s: string) => set({ pendingPrompt: s }),
