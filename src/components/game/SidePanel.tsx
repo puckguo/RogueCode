@@ -11,7 +11,13 @@ const rarityClass: Record<Rarity, string> = {
   legendary: "text-rarity-legendary border-rarity-legendary/70",
 };
 
-function ItemTile({ item, onEquip, onSalvage }: { item: Item; onEquip?: () => void; onSalvage?: () => void }) {
+function ItemTile({
+  item,
+  actions,
+}: {
+  item: Item;
+  actions?: { label: string; onClick: () => void; primary?: boolean }[];
+}) {
   return (
     <div className={`group relative rounded border bg-card/60 p-2 ${rarityClass[item.rarity]}`}>
       <div className="flex items-center justify-between text-xs">
@@ -24,18 +30,19 @@ function ItemTile({ item, onEquip, onSalvage }: { item: Item; onEquip?: () => vo
           <li key={i}>· {a.text}</li>
         ))}
       </ul>
-      <div className="mt-2 flex gap-1">
-        {onEquip && (
-          <button onClick={onEquip} className="rounded bg-primary/20 px-2 py-0.5 text-[10px] text-primary hover:bg-primary/30">
-            Equip
-          </button>
-        )}
-        {onSalvage && (
-          <button onClick={onSalvage} className="rounded bg-muted px-2 py-0.5 text-[10px] hover:bg-muted/70">
-            Salvage
-          </button>
-        )}
-      </div>
+      {actions && actions.length > 0 && (
+        <div className="mt-2 flex flex-wrap gap-1">
+          {actions.map((a, i) => (
+            <button
+              key={i}
+              onClick={a.onClick}
+              className={`rounded px-2 py-0.5 text-[10px] ${a.primary ? "bg-primary/20 text-primary hover:bg-primary/30" : "bg-muted hover:bg-muted/70"}`}
+            >
+              {a.label}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
