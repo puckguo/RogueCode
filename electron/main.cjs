@@ -210,6 +210,5 @@ ipcMain.handle("storage:delete", (_e, { name }) => {
 });
 
 app.whenReady().then(() => { ensureDataDir(); createWindow(); });
-app.whenReady().then(createWindow);
 app.on("window-all-closed", () => { if (process.platform !== "darwin") app.quit(); });
 app.on("activate", () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
