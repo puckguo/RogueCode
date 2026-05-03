@@ -253,7 +253,7 @@ export const useGame = create<State>()((set, get) => {
       });
     },
 
-    playCard: (idx) => {
+    playCard: (idx: number) => {
       const s = get();
       const card = s.hand[idx];
       if (!card) return;
@@ -363,7 +363,7 @@ export const useGame = create<State>()((set, get) => {
       });
     },
 
-    pickReward: (c) => {
+    pickReward: (c: Card | null) => {
       const s = get();
       if (c) {
         set({
@@ -383,7 +383,7 @@ export const useGame = create<State>()((set, get) => {
       set({ inventory: [...s.inventory, s.itemReward], itemReward: null, log: [...s.log, `+ Looted ${s.itemReward.name}.`] });
     },
 
-    equipItem: (id) => {
+    equipItem: (id: string) => {
       const s = get();
       const it = s.inventory.find((i) => i.id === id);
       if (!it) return;
@@ -406,7 +406,7 @@ export const useGame = create<State>()((set, get) => {
       });
     },
 
-    salvageItem: (id) => {
+    salvageItem: (id: string) => {
       const s = get();
       const inAny = s.inventory.find((i) => i.id === id) || s.stash.find((i) => i.id === id);
       if (!inAny) return;
@@ -418,7 +418,7 @@ export const useGame = create<State>()((set, get) => {
       persist({ shards: newShards, talentRanks: s.talentRanks, totalPoints: s.totalPoints, stash: newStash });
     },
 
-    spendTalent: (id) => {
+    spendTalent: (id: string) => {
       const s = get();
       const node = TALENT_TREE.find((n) => n.id === id);
       if (!node) return;
