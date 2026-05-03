@@ -1,33 +1,22 @@
 import { useEffect, useRef, useState } from "react";
+import { Terminal } from "@xterm/xterm";
+import { FitAddon } from "@xterm/addon-fit";
+import "@xterm/xterm/css/xterm.css";
 import { useGame } from "@/game/store";
-
-// Simulated CLI: streams "AI tokens" then goes idle waiting for prompt.
-// In Electron, this gets replaced with a node-pty bridge over IPC.
-
-const SAMPLE_CHUNKS = [
-  "Reading project structure...\n",
-  "Found 23 source files. Analyzing imports.\n",
-  "Refactoring utils/helpers.ts → extracting pure fns.\n",
-  "  + export function memoize<T>(fn: T): T { ... }\n",
-  "  + export function debounce(fn, ms) { ... }\n",
-  "Writing src/game/store.ts (zustand slice)...\n",
-  "Adding tests for combat resolution...\n",
-  "  ✓ deals correct damage with crit\n",
-  "  ✓ end turn refreshes energy\n",
-  "  ✓ enemy intent decremented on death\n",
-  "Running tsc --noEmit ...\n",
-  "  no errors found.\n",
-  "Committing: feat(game): wave progression & rewards\n",
-  "  [main 9f3a1c2] feat(game): wave progression & rewards\n",
-  "Patch applied. Shall I continue with the talent UI?\n",
-];
+import { cq, isElectron } from "@/lib/electron";
 
 export function CliTerminal() {
-  const { cliBuffer, cliStatus, pendingPrompt, setPendingPrompt, submitPrompt, appendCliOutput, setCliStatus, setTokensPerSec, tick } =
-    useGame();
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const idleTimer = useRef<number | null>(null);
-  const [autoLoop, setAutoLoop] = useState(false);
+  const { cliStatus, setCliStatus, appendCliOutput, setTokensPerSec, tick } = useGame();
+  const containerRef = useRef<HTMLDivElement>(null);
+  const termRef = useRef<Terminal | null>(null);
+  const fitRef = useRef<FitAddon | null>(null);
+  const sessionId = useRef<string | null>(null);
+
+  const [command, setCommand] = useState<string>("claude");
+  const [cwd, setCwd] = useState<string>("");
+  const [shells, setShells] = useState<string[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [running, setRunning] = useState(false);
 
   // Game tick
   useEffect(() => {
@@ -35,101 +24,153 @@ export function CliTerminal() {
     return () => clearInterval(id);
   }, [tick]);
 
-  // Stream tokens while STREAMING. After the script ends, go IDLE_WAITING.
+  // Init xterm
   useEffect(() => {
-    if (cliStatus !== "STREAMING") return;
-    let cancelled = false;
-    let chunkIdx = 0;
-    let charIdx = 0;
+    if (!containerRef.current) return;
+    const term = new Terminal({
+      fontFamily: "ui-monospace, SF Mono, Menlo, Consolas, monospace",
+      fontSize: 12,
+      theme: {
+        background: "#15131c",
+        foreground: "#d4ebd1",
+        cursor: "#ffb86b",
+      },
+      cursorBlink: true,
+      convertEol: true,
+      scrollback: 4000,
+    });
+    const fit = new FitAddon();
+    term.loadAddon(fit);
+    term.open(containerRef.current);
+    try { fit.fit(); } catch {}
+    termRef.current = term;
+    fitRef.current = fit;
+
+    term.onData((data) => {
+      if (sessionId.current && cq) cq.write(sessionId.current, data);
+    });
+
+    const ro = new ResizeObserver(() => {
+      try {
+        fit.fit();
+        if (sessionId.current && cq) cq.resize(sessionId.current, term.cols, term.rows);
+      } catch {}
+    });
+    ro.observe(containerRef.current);
+
+    if (!isElectron) {
+      term.writeln("\x1b[33m⚠  Browser preview mode\x1b[0m");
+      term.writeln("This panel is a real PTY when launched as a desktop app.");
+      term.writeln("Run:  \x1b[36mnpm run electron:dev\x1b[0m  to attach to claude / aider / your shell.");
+      term.writeln("");
+      term.writeln("Browser sandbox cannot spawn local processes — the simulated game loop is disabled");
+      term.writeln("to honor your 'no mock' request. Open in Electron to play.");
+    } else {
+      cq!.listShells().then(setShells).catch(() => {});
+    }
+
+    return () => {
+      ro.disconnect();
+      term.dispose();
+      termRef.current = null;
+    };
+  }, []);
+
+  // Wire IPC -> xterm + game store
+  useEffect(() => {
+    if (!cq) return;
     let tokensThisSec = 0;
     let secStart = Date.now();
-
-    const step = () => {
-      if (cancelled) return;
-      if (chunkIdx >= SAMPLE_CHUNKS.length) {
-        setCliStatus("IDLE_WAITING");
-        setTokensPerSec(0);
-        if (autoLoop) {
-          window.setTimeout(() => {
-            if (!cancelled) submitPrompt("continue");
-          }, 1500);
-        }
-        return;
-      }
-      const chunk = SAMPLE_CHUNKS[chunkIdx];
-      const piece = chunk.slice(charIdx, charIdx + 4);
-      appendCliOutput(piece);
-      charIdx += 4;
-      tokensThisSec += piece.length;
+    const offData = cq.onData(({ id, data }) => {
+      if (id !== sessionId.current) return;
+      termRef.current?.write(data);
+      appendCliOutput(data);
+      tokensThisSec += data.length;
       if (Date.now() - secStart > 1000) {
-        setTokensPerSec(tokensThisSec);
+        setTokensPerSec(Math.round(tokensThisSec / 4));
         tokensThisSec = 0;
         secStart = Date.now();
       }
-      if (charIdx >= chunk.length) {
-        charIdx = 0;
-        chunkIdx += 1;
-      }
-      window.setTimeout(step, 35 + Math.random() * 60);
-    };
-    step();
-    return () => {
-      cancelled = true;
-      if (idleTimer.current) window.clearTimeout(idleTimer.current);
-    };
-  }, [cliStatus, autoLoop, appendCliOutput, setCliStatus, setTokensPerSec, submitPrompt]);
+    });
+    const offStatus = cq.onStatus(({ id, status }) => {
+      if (id !== sessionId.current) return;
+      setCliStatus(status);
+      if (status !== "STREAMING") setTokensPerSec(0);
+    });
+    const offExit = cq.onExit(({ id }) => {
+      if (id !== sessionId.current) return;
+      setRunning(false);
+      sessionId.current = null;
+      termRef.current?.writeln("\r\n\x1b[31m[process exited]\x1b[0m");
+    });
+    return () => { offData(); offStatus(); offExit(); };
+  }, [appendCliOutput, setCliStatus, setTokensPerSec]);
 
-  // Autoscroll
-  useEffect(() => {
-    if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-  }, [cliBuffer]);
+  async function start() {
+    setError(null);
+    if (!cq) { setError("Open this app in Electron to spawn a PTY."); return; }
+    const t = termRef.current;
+    if (!t) return;
+    const res = await cq.spawn({
+      command,
+      cols: t.cols, rows: t.rows,
+      cwd: cwd || undefined,
+    });
+    if (!res.ok) { setError(res.error || "spawn failed"); return; }
+    sessionId.current = res.id!;
+    setRunning(true);
+    t.focus();
+  }
+  async function stop() {
+    if (sessionId.current && cq) await cq.kill(sessionId.current);
+    sessionId.current = null;
+    setRunning(false);
+  }
 
   const statusColor =
     cliStatus === "STREAMING" ? "text-emerald-400" : cliStatus === "ERROR" ? "text-destructive" : "text-amber-400";
 
   return (
     <div className="flex h-full flex-col rounded-lg border bg-card overflow-hidden">
-      <div className="flex items-center justify-between border-b px-3 py-2 text-xs">
-        <div className="flex items-center gap-2">
-          <span className={`inline-block size-2 rounded-full ${cliStatus === "STREAMING" ? "bg-emerald-400 animate-pulse" : "bg-amber-400"}`} />
-          <span className={statusColor + " font-mono"}>{cliStatus}</span>
-          <span className="text-muted-foreground font-mono">claude-code · session#1</span>
+      <div className="flex flex-wrap items-center gap-2 border-b px-3 py-2 text-xs">
+        <span className={`inline-block size-2 rounded-full ${cliStatus === "STREAMING" ? "bg-emerald-400 animate-pulse" : "bg-amber-400"}`} />
+        <span className={statusColor + " font-mono"}>{cliStatus}</span>
+        <span className="text-muted-foreground font-mono">{running ? `pty · ${command}` : "no session"}</span>
+        <div className="ml-auto flex items-center gap-1">
+          <input
+            list="cq-shells"
+            value={command}
+            onChange={(e) => setCommand(e.target.value)}
+            disabled={running}
+            placeholder="claude"
+            className="w-28 rounded border border-border bg-input px-2 py-1 font-mono text-[11px] outline-none disabled:opacity-50"
+          />
+          <datalist id="cq-shells">
+            {shells.map((s) => <option key={s} value={s} />)}
+          </datalist>
+          <input
+            value={cwd}
+            onChange={(e) => setCwd(e.target.value)}
+            disabled={running}
+            placeholder="cwd (optional)"
+            className="w-40 rounded border border-border bg-input px-2 py-1 font-mono text-[11px] outline-none disabled:opacity-50"
+          />
+          {!running ? (
+            <button onClick={start} className="rounded bg-primary px-2 py-1 text-[11px] font-bold text-primary-foreground hover:opacity-90">
+              ▶ Spawn
+            </button>
+          ) : (
+            <button onClick={stop} className="rounded border border-destructive bg-destructive/10 px-2 py-1 text-[11px] text-destructive hover:bg-destructive/20">
+              ■ Kill
+            </button>
+          )}
         </div>
-        <label className="flex items-center gap-1 text-muted-foreground">
-          <input type="checkbox" checked={autoLoop} onChange={(e) => setAutoLoop(e.target.checked)} />
-          auto-loop
-        </label>
       </div>
-      <div ref={scrollRef} className="flex-1 overflow-y-auto bg-[oklch(0.12_0.01_260)] p-3 terminal-text">
-        <pre className="whitespace-pre-wrap text-emerald-200/90">{cliBuffer || "$ claude\nReady. Type a prompt below to begin.\n"}</pre>
-        {cliStatus === "IDLE_WAITING" && (
-          <div className="mt-2 text-amber-300">
-            ⏸ AI is waiting for your input <span className="caret">▍</span>
-          </div>
-        )}
+      {error && <div className="border-b border-destructive/40 bg-destructive/10 px-3 py-1 text-[11px] text-destructive">{error}</div>}
+      <div ref={containerRef} className="flex-1 min-h-0 bg-[#15131c] p-2" />
+      <div className="border-t bg-card px-3 py-1.5 text-[10px] text-muted-foreground">
+        While the PTY streams, the battle advances. When the AI stops outputting for ~1.5s, the game pauses until you type & press Enter in the terminal.
       </div>
-      <form
-        className="flex items-center gap-2 border-t bg-card px-3 py-2"
-        onSubmit={(e) => {
-          e.preventDefault();
-          submitPrompt(pendingPrompt);
-        }}
-      >
-        <span className="font-mono text-xs text-primary">›</span>
-        <input
-          value={pendingPrompt}
-          onChange={(e) => setPendingPrompt(e.target.value)}
-          placeholder={cliStatus === "IDLE_WAITING" ? "Type a prompt to resume the game…" : "Send instruction"}
-          className="flex-1 bg-transparent font-mono text-xs outline-none placeholder:text-muted-foreground"
-          autoFocus
-        />
-        <button
-          type="submit"
-          className="rounded bg-primary px-3 py-1 text-xs font-medium text-primary-foreground hover:opacity-90"
-        >
-          Send ⏎
-        </button>
-      </form>
     </div>
   );
 }
