@@ -11,7 +11,13 @@ const rarityClass: Record<Rarity, string> = {
   legendary: "text-rarity-legendary border-rarity-legendary/70",
 };
 
-function ItemTile({ item, onEquip, onSalvage }: { item: Item; onEquip?: () => void; onSalvage?: () => void }) {
+function ItemTile({
+  item,
+  actions,
+}: {
+  item: Item;
+  actions?: { label: string; onClick: () => void; primary?: boolean }[];
+}) {
   return (
     <div className={`group relative rounded border bg-card/60 p-2 ${rarityClass[item.rarity]}`}>
       <div className="flex items-center justify-between text-xs">
@@ -24,18 +30,19 @@ function ItemTile({ item, onEquip, onSalvage }: { item: Item; onEquip?: () => vo
           <li key={i}>· {a.text}</li>
         ))}
       </ul>
-      <div className="mt-2 flex gap-1">
-        {onEquip && (
-          <button onClick={onEquip} className="rounded bg-primary/20 px-2 py-0.5 text-[10px] text-primary hover:bg-primary/30">
-            Equip
-          </button>
-        )}
-        {onSalvage && (
-          <button onClick={onSalvage} className="rounded bg-muted px-2 py-0.5 text-[10px] hover:bg-muted/70">
-            Salvage
-          </button>
-        )}
-      </div>
+      {actions && actions.length > 0 && (
+        <div className="mt-2 flex flex-wrap gap-1">
+          {actions.map((a, i) => (
+            <button
+              key={i}
+              onClick={a.onClick}
+              className={`rounded px-2 py-0.5 text-[10px] ${a.primary ? "bg-primary/20 text-primary hover:bg-primary/30" : "bg-muted hover:bg-muted/70"}`}
+            >
+              {a.label}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -43,9 +50,12 @@ function ItemTile({ item, onEquip, onSalvage }: { item: Item; onEquip?: () => vo
 export function SidePanel() {
   const {
     inventory,
+    stash,
     equipment,
     equipItem,
     salvageItem,
+    stashItem,
+    withdrawStash,
     rewardChoices,
     pickReward,
     itemReward,
@@ -61,6 +71,9 @@ export function SidePanel() {
     cliStatus,
     tokensPerSec,
     combo,
+    nextDropLegendary,
+    runSummary,
+    dismissRunSummary,
   } = useGame();
 
   const slots: Item["slot"][] = ["weapon", "armor", "helm", "boots", "ring", "amulet"];
@@ -107,6 +120,11 @@ export function SidePanel() {
         <div className="mt-2 text-[10px] text-muted-foreground">
           Status: <span className={cliStatus === "STREAMING" ? "text-emerald-400" : "text-amber-400"}>{cliStatus}</span>
         </div>
+        {nextDropLegendary && (
+          <div className="mt-2 rounded border border-rarity-legendary/60 bg-rarity-legendary/10 px-2 py-1 text-[10px] text-rarity-legendary">
+            ⚡ Next loot will be Legendary (commit detected)
+          </div>
+        )}
       </div>
 
       {/* Tabs (simple) */}
@@ -143,7 +161,40 @@ export function SidePanel() {
               <div className="px-2 py-4 text-center text-xs text-muted-foreground">No items yet. Defeat elites & bosses for loot.</div>
             )}
             {inventory.map((it) => (
-              <ItemTile key={it.id} item={it} onEquip={() => equipItem(it.id)} onSalvage={() => salvageItem(it.id)} />
+              <ItemTile
+                key={it.id}
+                item={it}
+                actions={[
+                  { label: "Equip", primary: true, onClick: () => equipItem(it.id) },
+                  { label: "Stash", onClick: () => stashItem(it.id) },
+                  { label: "Salvage", onClick: () => salvageItem(it.id) },
+                ]}
+              />
+            ))}
+          </div>
+        </div>
+
+        {/* Stash */}
+        <div className="rounded-lg border bg-card">
+          <div className="flex items-center justify-between border-b px-3 py-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">
+            <span>Stash ({stash.length})</span>
+            <span className="text-[10px] font-normal opacity-70">persists across runs</span>
+          </div>
+          <div className="max-h-40 space-y-1 overflow-y-auto p-2">
+            {stash.length === 0 && (
+              <div className="px-2 py-3 text-center text-[11px] text-muted-foreground">Send items here to keep them between runs.</div>
+            )}
+            {stash.map((it) => (
+              <ItemTile
+                key={it.id}
+                item={it}
+                actions={[
+                  inRun
+                    ? { label: "Withdraw", primary: true, onClick: () => withdrawStash(it.id) }
+                    : { label: "(start a run to withdraw)", onClick: () => {} },
+                  { label: "Salvage", onClick: () => salvageItem(it.id) },
+                ]}
+              />
             ))}
           </div>
         </div>
@@ -260,6 +311,63 @@ export function SidePanel() {
                   Skip card reward
                 </button>
               )}
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Run summary */}
+      <AnimatePresence>
+        {runSummary && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 grid place-items-center bg-background/80 backdrop-blur-sm"
+          >
+            <motion.div
+              initial={{ scale: 0.9, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              className="w-[480px] max-w-[90vw] rounded-xl border bg-card p-6 text-center shadow-2xl"
+            >
+              <div className="text-5xl">☠</div>
+              <h2 className="mt-2 text-xl font-bold text-primary">Run Ended</h2>
+              <div className="mt-4 grid grid-cols-3 gap-3 text-sm">
+                <div>
+                  <div className="text-[10px] uppercase text-muted-foreground">Wave</div>
+                  <div className="text-2xl font-bold">{runSummary.wave}</div>
+                </div>
+                <div>
+                  <div className="text-[10px] uppercase text-muted-foreground">+ Shards</div>
+                  <div className="text-2xl font-bold text-primary">⟡ {runSummary.shards}</div>
+                </div>
+                <div>
+                  <div className="text-[10px] uppercase text-muted-foreground">+ Talent Pts</div>
+                  <div className="text-2xl font-bold text-accent">✦ {runSummary.points}</div>
+                </div>
+              </div>
+              {runSummary.events.length > 0 && (
+                <div className="mt-4 rounded border bg-background/40 p-3 text-left text-xs text-muted-foreground">
+                  <div className="mb-1 text-[10px] uppercase">Coding events this run:</div>
+                  {runSummary.events.map((e, i) => (
+                    <div key={i}>· {e}</div>
+                  ))}
+                </div>
+              )}
+              <div className="mt-4 flex gap-2">
+                <button
+                  onClick={dismissRunSummary}
+                  className="flex-1 rounded border px-3 py-2 text-sm hover:bg-muted"
+                >
+                  Close
+                </button>
+                <button
+                  onClick={() => { dismissRunSummary(); startRun(); }}
+                  className="flex-1 rounded bg-primary px-3 py-2 text-sm font-bold text-primary-foreground"
+                >
+                  ⚔ Start New Run
+                </button>
+              </div>
             </motion.div>
           </motion.div>
         )}

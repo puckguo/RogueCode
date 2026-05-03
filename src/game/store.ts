@@ -36,10 +36,10 @@ function persist(s: SaveData) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(s));
 }
 
-function rollItem(ilvl: number, magicFind: number): Item {
+function rollItem(ilvl: number, magicFind: number, forceRarity?: Rarity): Item {
   const slots: Item["slot"][] = ["weapon", "armor", "helm", "boots", "ring", "amulet"];
   const slot = slots[Math.floor(Math.random() * slots.length)];
-  const rarity: Rarity = rollRarity(magicFind);
+  const rarity: Rarity = forceRarity || rollRarity(magicFind);
   const count = RARITY_AFFIX_COUNT[rarity];
   const affixes = Array.from({ length: count }).map(() => AFFIX_POOL[Math.floor(Math.random() * AFFIX_POOL.length)]);
   const namePool = ITEM_NAMES[slot] || ["Trinket"];
@@ -97,6 +97,11 @@ type State = {
   totalPoints: number;
   stash: Item[];
 
+  // Coding-behavior hooks
+  nextDropLegendary: boolean;
+  recentEvents: { ts: number; text: string }[];
+  runSummary: null | { wave: number; shards: number; points: number; events: string[] };
+
   // Actions
   setCliStatus: (s: CliStatus) => void;
   appendCliOutput: (chunk: string) => void;
@@ -112,8 +117,11 @@ type State = {
   takeItemReward: () => void;
   equipItem: (id: string) => void;
   salvageItem: (id: string) => void;
+  stashItem: (id: string) => void;
+  withdrawStash: (id: string) => void;
   spendTalent: (id: string) => void;
   refundAllTalents: () => void;
+  dismissRunSummary: () => void;
 
   tick: () => void;
   winWave: () => void;
@@ -176,6 +184,10 @@ export const useGame = create<State>()((set, get) => {
     totalPoints: save.totalPoints,
     stash: save.stash,
 
+    nextDropLegendary: false,
+    recentEvents: [],
+    runSummary: null,
+
     setCliStatus: (s: CliStatus) => {
       const prev = get().cliStatus;
       if (prev === s) return;
@@ -184,14 +196,71 @@ export const useGame = create<State>()((set, get) => {
         set({ log: [...get().log, "▶ AI streaming — battle resumes"] });
       }
       if (s === "IDLE_WAITING") {
-        set({ log: [...get().log, "⏸ AI idle — talk to your AI to resume"] });
+        // reset combo on long idle
+        set({
+          log: [...get().log, "⏸ AI idle — talk to your AI to resume"],
+          combo: 0,
+          comboTimer: 0,
+        });
       }
     },
     appendCliOutput: (chunk: string) => {
-      set({ cliBuffer: (get().cliBuffer + chunk).slice(-4000) });
-      if (get().cliStatus === "STREAMING") {
-        set({ comboTimer: get().comboTimer + chunk.length });
+      const s = get();
+      const buf = (s.cliBuffer + chunk).slice(-8000);
+      let combo = s.combo;
+      let comboTimer = s.comboTimer;
+      const events = [...s.recentEvents];
+      let nextDropLegendary = s.nextDropLegendary;
+      const log = [...s.log];
+
+      if (s.cliStatus === "STREAMING") {
+        comboTimer += chunk.length;
+        // every ~600 chars of streamed output = +1 combo
+        const newCombo = Math.floor(comboTimer / 600);
+        if (newCombo > combo) {
+          combo = newCombo;
+          log.push(`✦ Combo ×${combo} — magic find boosted`);
+        }
       }
+
+      // pattern hooks on the rolling buffer
+      const hooks: { re: RegExp; text: string; effect: () => void }[] = [
+        {
+          re: /\b(commit|committed)\b.*?\b[a-f0-9]{7,}\b/i,
+          text: "Git commit detected → next loot guaranteed Legendary!",
+          effect: () => { nextDropLegendary = true; },
+        },
+        {
+          re: /(✓|PASS|passed|all tests pass|tests? passed)/,
+          text: "Tests passing → +5 ether shards",
+          effect: () => { set({ shards: get().shards + 5 }); },
+        },
+        {
+          re: /\b(error|Error|FAIL|failed|Traceback)\b/,
+          text: "AI hit an error — enemies enraged (+1 ATK)",
+          effect: () => {
+            set({ enemies: get().enemies.map((e) => ({ ...e, atk: e.atk + 1, intent: e.intent + 1 })) });
+          },
+        },
+      ];
+      // only fire each hook once per ~5s window
+      const now = Date.now();
+      for (const h of hooks) {
+        const fired = events.find((e) => e.text === h.text && now - e.ts < 5000);
+        if (!fired && h.re.test(buf.slice(-400))) {
+          h.effect();
+          events.push({ ts: now, text: h.text });
+          log.push(`⚡ ${h.text}`);
+        }
+      }
+
+      set({
+        cliBuffer: buf,
+        combo, comboTimer,
+        recentEvents: events.filter((e) => now - e.ts < 30000),
+        nextDropLegendary,
+        log: log.slice(-40),
+      });
     },
     setTokensPerSec: (n: number) => set({ tokensPerSec: n }),
     setPendingPrompt: (s: string) => set({ pendingPrompt: s }),
@@ -236,8 +305,9 @@ export const useGame = create<State>()((set, get) => {
     endRun: () => {
       const s = get();
       const earned = Math.floor(s.wave * 5 + s.combo * 2);
+      const points = Math.floor(s.wave / 2);
       const newShards = s.shards + earned;
-      const newPoints = s.totalPoints + Math.floor(s.wave / 2);
+      const newPoints = s.totalPoints + points;
       const save: SaveData = {
         shards: newShards,
         talentRanks: s.talentRanks,
@@ -249,8 +319,34 @@ export const useGame = create<State>()((set, get) => {
         inRun: false,
         shards: newShards,
         totalPoints: newPoints,
-        log: [...s.log, `☠ Run ended. +${earned} ether shards, +${Math.floor(s.wave / 2)} talent points.`],
+        log: [...s.log, `☠ Run ended. +${earned} ether shards, +${points} talent points.`],
+        runSummary: {
+          wave: s.wave,
+          shards: earned,
+          points,
+          events: s.recentEvents.slice(-6).map((e) => e.text),
+        },
       });
+    },
+
+    dismissRunSummary: () => set({ runSummary: null }),
+
+    stashItem: (id: string) => {
+      const s = get();
+      const it = s.inventory.find((i) => i.id === id);
+      if (!it) return;
+      const newInv = s.inventory.filter((i) => i.id !== id);
+      const newStash = [...s.stash, it];
+      set({ inventory: newInv, stash: newStash });
+      persist({ shards: s.shards, talentRanks: s.talentRanks, totalPoints: s.totalPoints, stash: newStash });
+    },
+    withdrawStash: (id: string) => {
+      const s = get();
+      const it = s.stash.find((i) => i.id === id);
+      if (!it || !s.inRun) return;
+      const newStash = s.stash.filter((i) => i.id !== id);
+      set({ inventory: [...s.inventory, it], stash: newStash });
+      persist({ shards: s.shards, talentRanks: s.talentRanks, totalPoints: s.totalPoints, stash: newStash });
     },
 
     playCard: (idx: number) => {
@@ -465,9 +561,13 @@ export const useGame = create<State>()((set, get) => {
       const isBoss = s.wave % 5 === 0;
       const choices = shuffle(REWARD_POOL).slice(0, 3);
       let itemReward: Item | null = null;
-      if (s.wave % 3 === 0) {
-        itemReward = rollItem(s.wave, magicFind);
+      let consumedLegendary = false;
+      if (s.wave % 3 === 0 || s.nextDropLegendary) {
+        const force: Rarity | undefined = s.nextDropLegendary ? "legendary" : undefined;
+        itemReward = rollItem(s.wave, magicFind, force);
+        if (s.nextDropLegendary) consumedLegendary = true;
       }
+      if (consumedLegendary) log.push("⚡ Legendary drop triggered by your commit!");
       const next = s.wave + 1;
       const enemies: Enemy[] = [rollEnemy(next)];
       if (next % 4 === 0) enemies.push(rollEnemy(next));
@@ -477,6 +577,7 @@ export const useGame = create<State>()((set, get) => {
         rewardChoices: choices,
         itemReward,
         log,
+        nextDropLegendary: consumedLegendary ? false : s.nextDropLegendary,
         player: { ...s.player, hp: Math.min(s.player.maxHp, s.player.hp + 4), block: 0, energy: s.player.maxEnergy },
         hand: [],
       });
