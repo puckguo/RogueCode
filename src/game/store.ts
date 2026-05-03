@@ -561,9 +561,13 @@ export const useGame = create<State>()((set, get) => {
       const isBoss = s.wave % 5 === 0;
       const choices = shuffle(REWARD_POOL).slice(0, 3);
       let itemReward: Item | null = null;
-      if (s.wave % 3 === 0) {
-        itemReward = rollItem(s.wave, magicFind);
+      let consumedLegendary = false;
+      if (s.wave % 3 === 0 || s.nextDropLegendary) {
+        const force: Rarity | undefined = s.nextDropLegendary ? "legendary" : undefined;
+        itemReward = rollItem(s.wave, magicFind, force);
+        if (s.nextDropLegendary) consumedLegendary = true;
       }
+      if (consumedLegendary) log.push("⚡ Legendary drop triggered by your commit!");
       const next = s.wave + 1;
       const enemies: Enemy[] = [rollEnemy(next)];
       if (next % 4 === 0) enemies.push(rollEnemy(next));
@@ -573,6 +577,7 @@ export const useGame = create<State>()((set, get) => {
         rewardChoices: choices,
         itemReward,
         log,
+        nextDropLegendary: consumedLegendary ? false : s.nextDropLegendary,
         player: { ...s.player, hp: Math.min(s.player.maxHp, s.player.hp + 4), block: 0, energy: s.player.maxEnergy },
         hand: [],
       });
