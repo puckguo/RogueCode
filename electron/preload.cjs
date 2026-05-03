@@ -8,6 +8,13 @@ contextBridge.exposeInMainWorld("codequest", {
   kill: (id) => ipcRenderer.invoke("pty:kill", { id }),
   listShells: () => ipcRenderer.invoke("pty:list-shells"),
   watchLog: (id, file) => ipcRenderer.invoke("logwatch:start", { id, file }),
+  storage: {
+    dir: () => ipcRenderer.invoke("storage:dir"),
+    list: () => ipcRenderer.invoke("storage:list"),
+    read: (name) => ipcRenderer.invoke("storage:read", { name }),
+    write: (name, content) => ipcRenderer.invoke("storage:write", { name, content }),
+    remove: (name) => ipcRenderer.invoke("storage:delete", { name }),
+  },
   onData: (cb) => {
     const fn = (_e, p) => cb(p);
     ipcRenderer.on("pty:data", fn);
