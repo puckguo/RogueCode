@@ -176,7 +176,7 @@ export const useGame = create<State>()((set, get) => {
     totalPoints: save.totalPoints,
     stash: save.stash,
 
-    setCliStatus: (s) => {
+    setCliStatus: (s: CliStatus) => {
       const prev = get().cliStatus;
       if (prev === s) return;
       set({ cliStatus: s });
@@ -187,15 +187,15 @@ export const useGame = create<State>()((set, get) => {
         set({ log: [...get().log, "⏸ AI idle — talk to your AI to resume"] });
       }
     },
-    appendCliOutput: (chunk) => {
+    appendCliOutput: (chunk: string) => {
       set({ cliBuffer: (get().cliBuffer + chunk).slice(-4000) });
       if (get().cliStatus === "STREAMING") {
         set({ comboTimer: get().comboTimer + chunk.length });
       }
     },
-    setTokensPerSec: (n) => set({ tokensPerSec: n }),
-    setPendingPrompt: (s) => set({ pendingPrompt: s }),
-    submitPrompt: (prompt) => {
+    setTokensPerSec: (n: number) => set({ tokensPerSec: n }),
+    setPendingPrompt: (s: string) => set({ pendingPrompt: s }),
+    submitPrompt: (prompt: string) => {
       if (!prompt.trim()) return;
       set({
         cliBuffer: get().cliBuffer + `\n$ ${prompt}\n`,
