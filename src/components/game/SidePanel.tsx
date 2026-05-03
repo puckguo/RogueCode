@@ -50,9 +50,12 @@ function ItemTile({
 export function SidePanel() {
   const {
     inventory,
+    stash,
     equipment,
     equipItem,
     salvageItem,
+    stashItem,
+    withdrawStash,
     rewardChoices,
     pickReward,
     itemReward,
@@ -68,6 +71,9 @@ export function SidePanel() {
     cliStatus,
     tokensPerSec,
     combo,
+    nextDropLegendary,
+    runSummary,
+    dismissRunSummary,
   } = useGame();
 
   const slots: Item["slot"][] = ["weapon", "armor", "helm", "boots", "ring", "amulet"];
@@ -150,7 +156,40 @@ export function SidePanel() {
               <div className="px-2 py-4 text-center text-xs text-muted-foreground">No items yet. Defeat elites & bosses for loot.</div>
             )}
             {inventory.map((it) => (
-              <ItemTile key={it.id} item={it} onEquip={() => equipItem(it.id)} onSalvage={() => salvageItem(it.id)} />
+              <ItemTile
+                key={it.id}
+                item={it}
+                actions={[
+                  { label: "Equip", primary: true, onClick: () => equipItem(it.id) },
+                  { label: "Stash", onClick: () => stashItem(it.id) },
+                  { label: "Salvage", onClick: () => salvageItem(it.id) },
+                ]}
+              />
+            ))}
+          </div>
+        </div>
+
+        {/* Stash */}
+        <div className="rounded-lg border bg-card">
+          <div className="flex items-center justify-between border-b px-3 py-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">
+            <span>Stash ({stash.length})</span>
+            <span className="text-[10px] font-normal opacity-70">persists across runs</span>
+          </div>
+          <div className="max-h-40 space-y-1 overflow-y-auto p-2">
+            {stash.length === 0 && (
+              <div className="px-2 py-3 text-center text-[11px] text-muted-foreground">Send items here to keep them between runs.</div>
+            )}
+            {stash.map((it) => (
+              <ItemTile
+                key={it.id}
+                item={it}
+                actions={[
+                  inRun
+                    ? { label: "Withdraw", primary: true, onClick: () => withdrawStash(it.id) }
+                    : { label: "(start a run to withdraw)", onClick: () => {} },
+                  { label: "Salvage", onClick: () => salvageItem(it.id) },
+                ]}
+              />
             ))}
           </div>
         </div>
