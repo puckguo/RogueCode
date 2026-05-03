@@ -120,6 +120,11 @@ export function SidePanel() {
         <div className="mt-2 text-[10px] text-muted-foreground">
           Status: <span className={cliStatus === "STREAMING" ? "text-emerald-400" : "text-amber-400"}>{cliStatus}</span>
         </div>
+        {nextDropLegendary && (
+          <div className="mt-2 rounded border border-rarity-legendary/60 bg-rarity-legendary/10 px-2 py-1 text-[10px] text-rarity-legendary">
+            ⚡ Next loot will be Legendary (commit detected)
+          </div>
+        )}
       </div>
 
       {/* Tabs (simple) */}
@@ -306,6 +311,63 @@ export function SidePanel() {
                   Skip card reward
                 </button>
               )}
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Run summary */}
+      <AnimatePresence>
+        {runSummary && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 grid place-items-center bg-background/80 backdrop-blur-sm"
+          >
+            <motion.div
+              initial={{ scale: 0.9, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              className="w-[480px] max-w-[90vw] rounded-xl border bg-card p-6 text-center shadow-2xl"
+            >
+              <div className="text-5xl">☠</div>
+              <h2 className="mt-2 text-xl font-bold text-primary">Run Ended</h2>
+              <div className="mt-4 grid grid-cols-3 gap-3 text-sm">
+                <div>
+                  <div className="text-[10px] uppercase text-muted-foreground">Wave</div>
+                  <div className="text-2xl font-bold">{runSummary.wave}</div>
+                </div>
+                <div>
+                  <div className="text-[10px] uppercase text-muted-foreground">+ Shards</div>
+                  <div className="text-2xl font-bold text-primary">⟡ {runSummary.shards}</div>
+                </div>
+                <div>
+                  <div className="text-[10px] uppercase text-muted-foreground">+ Talent Pts</div>
+                  <div className="text-2xl font-bold text-accent">✦ {runSummary.points}</div>
+                </div>
+              </div>
+              {runSummary.events.length > 0 && (
+                <div className="mt-4 rounded border bg-background/40 p-3 text-left text-xs text-muted-foreground">
+                  <div className="mb-1 text-[10px] uppercase">Coding events this run:</div>
+                  {runSummary.events.map((e, i) => (
+                    <div key={i}>· {e}</div>
+                  ))}
+                </div>
+              )}
+              <div className="mt-4 flex gap-2">
+                <button
+                  onClick={dismissRunSummary}
+                  className="flex-1 rounded border px-3 py-2 text-sm hover:bg-muted"
+                >
+                  Close
+                </button>
+                <button
+                  onClick={() => { dismissRunSummary(); startRun(); }}
+                  className="flex-1 rounded bg-primary px-3 py-2 text-sm font-bold text-primary-foreground"
+                >
+                  ⚔ Start New Run
+                </button>
+              </div>
             </motion.div>
           </motion.div>
         )}
