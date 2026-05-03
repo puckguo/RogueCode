@@ -170,6 +170,46 @@ ipcMain.handle("logwatch:start", (_evt, { id, file }) => {
   return { ok: true };
 });
 
+// =================== Local .md storage ===================
+// Persists game data as plain markdown files in ~/.codequest/
+// Also writes SKILL.md so the AI in your CLI can read game context.
+const DATA_DIR = path.join(os.homedir(), ".codequest");
+function ensureDataDir() {
+  try { if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true }); } catch {}
+}
+function safeName(name) {
+  return String(name).replace(/[^a-zA-Z0-9._-]/g, "_");
+}
+ipcMain.handle("storage:dir", () => { ensureDataDir(); return DATA_DIR; });
+ipcMain.handle("storage:list", () => {
+  ensureDataDir();
+  try {
+    return fs.readdirSync(DATA_DIR).filter((f) => f.endsWith(".md"));
+  } catch { return []; }
+});
+ipcMain.handle("storage:read", (_e, { name }) => {
+  ensureDataDir();
+  const p = path.join(DATA_DIR, safeName(name));
+  try {
+    if (!fs.existsSync(p)) return { ok: false, error: "not found" };
+    return { ok: true, content: fs.readFileSync(p, "utf8") };
+  } catch (e) { return { ok: false, error: String(e) }; }
+});
+ipcMain.handle("storage:write", (_e, { name, content }) => {
+  ensureDataDir();
+  const p = path.join(DATA_DIR, safeName(name));
+  try {
+    fs.writeFileSync(p, String(content), "utf8");
+    return { ok: true, path: p };
+  } catch (e) { return { ok: false, error: String(e) }; }
+});
+ipcMain.handle("storage:delete", (_e, { name }) => {
+  const p = path.join(DATA_DIR, safeName(name));
+  try { if (fs.existsSync(p)) fs.unlinkSync(p); return { ok: true }; }
+  catch (e) { return { ok: false, error: String(e) }; }
+});
+
+app.whenReady().then(() => { ensureDataDir(); createWindow(); });
 app.whenReady().then(createWindow);
 app.on("window-all-closed", () => { if (process.platform !== "darwin") app.quit(); });
 app.on("activate", () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
