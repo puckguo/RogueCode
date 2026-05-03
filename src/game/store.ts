@@ -305,8 +305,9 @@ export const useGame = create<State>()((set, get) => {
     endRun: () => {
       const s = get();
       const earned = Math.floor(s.wave * 5 + s.combo * 2);
+      const points = Math.floor(s.wave / 2);
       const newShards = s.shards + earned;
-      const newPoints = s.totalPoints + Math.floor(s.wave / 2);
+      const newPoints = s.totalPoints + points;
       const save: SaveData = {
         shards: newShards,
         talentRanks: s.talentRanks,
@@ -318,8 +319,34 @@ export const useGame = create<State>()((set, get) => {
         inRun: false,
         shards: newShards,
         totalPoints: newPoints,
-        log: [...s.log, `☠ Run ended. +${earned} ether shards, +${Math.floor(s.wave / 2)} talent points.`],
+        log: [...s.log, `☠ Run ended. +${earned} ether shards, +${points} talent points.`],
+        runSummary: {
+          wave: s.wave,
+          shards: earned,
+          points,
+          events: s.recentEvents.slice(-6).map((e) => e.text),
+        },
       });
+    },
+
+    dismissRunSummary: () => set({ runSummary: null }),
+
+    stashItem: (id: string) => {
+      const s = get();
+      const it = s.inventory.find((i) => i.id === id);
+      if (!it) return;
+      const newInv = s.inventory.filter((i) => i.id !== id);
+      const newStash = [...s.stash, it];
+      set({ inventory: newInv, stash: newStash });
+      persist({ shards: s.shards, talentRanks: s.talentRanks, totalPoints: s.totalPoints, stash: newStash });
+    },
+    withdrawStash: (id: string) => {
+      const s = get();
+      const it = s.stash.find((i) => i.id === id);
+      if (!it || !s.inRun) return;
+      const newStash = s.stash.filter((i) => i.id !== id);
+      set({ inventory: [...s.inventory, it], stash: newStash });
+      persist({ shards: s.shards, talentRanks: s.talentRanks, totalPoints: s.totalPoints, stash: newStash });
     },
 
     playCard: (idx: number) => {
