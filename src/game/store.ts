@@ -116,6 +116,7 @@ type State = {
   refundAllTalents: () => void;
 
   tick: () => void;
+  winWave: () => void;
 };
 
 function computeStats(s: Pick<State, "talentRanks" | "equipment">) {
@@ -144,7 +145,7 @@ function computeStats(s: Pick<State, "talentRanks" | "equipment">) {
   return { atk, maxHp: hp, crit, energy, dropBonus };
 }
 
-export const useGame = create<State>((set, get) => {
+export const useGame = create<State>()((set, get) => {
   const save = loadSave();
   return {
     cliStatus: "IDLE_WAITING",
