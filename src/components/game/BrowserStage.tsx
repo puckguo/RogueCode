@@ -71,15 +71,28 @@ export function BrowserStage() {
     const onNav = (e: any) => {
       if (e?.url) setInput(e.url);
     };
+    // Intercept popups (target=_blank, window.open) and open them in the same
+    // webview so the global pause logic still applies. Otherwise videos open
+    // in a separate Electron window that we cannot control.
+    const onNewWindow = (e: any) => {
+      try { e.preventDefault?.(); } catch {}
+      if (e?.url) {
+        try { wv.loadURL(e.url); } catch {}
+        setUrl(e.url);
+        setInput(e.url);
+      }
+    };
     wv.addEventListener("did-start-loading", onStart);
     wv.addEventListener("did-stop-loading", onStop);
     wv.addEventListener("did-navigate", onNav);
     wv.addEventListener("did-navigate-in-page", onNav);
+    wv.addEventListener("new-window", onNewWindow);
     return () => {
       wv.removeEventListener("did-start-loading", onStart);
       wv.removeEventListener("did-stop-loading", onStop);
       wv.removeEventListener("did-navigate", onNav);
       wv.removeEventListener("did-navigate-in-page", onNav);
+      wv.removeEventListener("new-window", onNewWindow);
     };
   }, [electron]);
 
