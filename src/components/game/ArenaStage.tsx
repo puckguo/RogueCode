@@ -465,9 +465,10 @@ export function ArenaStage() {
     st.fx = st.fx.filter((f) => f.life > 0);
 
     // pickup magnet + pick
+    const magnetR = 90 + loadout.magnet;
     for (const pk of st.pickups) {
       const dist = Math.hypot(pk.x - p.x, pk.y - p.y);
-      if (dist < 90) {
+      if (dist < magnetR) {
         const ang = Math.atan2(p.y - pk.y, p.x - pk.x);
         pk.x += Math.cos(ang) * 240 * dt;
         pk.y += Math.sin(ang) * 240 * dt;
@@ -490,9 +491,12 @@ export function ArenaStage() {
       st.wave += 1;
       st.pendingReward = true;
       const isBoss = (st.wave - 1) % 5 === 0;
-      const force = nextDropLegendary ? "legendary" : isBoss ? "rare" : undefined;
-      const it = rollItem(st.wave, 0, force);
+      const forcedRarity: Rarity | undefined = nextDropLegendary ? "legendary" : isBoss ? "rare" : undefined;
+      const it = rollItem(st.wave, 0, forcedRarity);
       addInventoryItem?.(it, !!nextDropLegendary);
+      // Offer 3 in-run upgrades to choose from (Brotato style).
+      // Magic find scales with wave count.
+      setUpgradeChoices(rollArenaUpgrades(st.wave * 2));
     }
 
     if (p.hp <= 0) {
