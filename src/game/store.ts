@@ -127,6 +127,9 @@ type State = {
   refundAllTalents: () => void;
   dismissRunSummary: () => void;
 
+  setShardsAdd: (n: number) => void;
+  addInventoryItem: (it: Item, consumeLegendary?: boolean) => void;
+
   tick: () => void;
   winWave: () => void;
 };
@@ -334,6 +337,21 @@ export const useGame = create<State>()((set, get) => {
     },
 
     dismissRunSummary: () => set({ runSummary: null }),
+
+    setShardsAdd: (n: number) => {
+      const s = get();
+      const newShards = s.shards + n;
+      set({ shards: newShards });
+      persist({ shards: newShards, talentRanks: s.talentRanks, totalPoints: s.totalPoints, stash: s.stash });
+    },
+    addInventoryItem: (it: Item, consumeLegendary?: boolean) => {
+      const s = get();
+      set({
+        inventory: [...s.inventory, it],
+        log: [...s.log, `+ Looted ${it.name} (${it.rarity})`].slice(-30),
+        nextDropLegendary: consumeLegendary ? false : s.nextDropLegendary,
+      });
+    },
 
     stashItem: (id: string) => {
       const s = get();
