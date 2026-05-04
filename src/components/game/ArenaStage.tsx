@@ -543,11 +543,23 @@ export function ArenaStage() {
     const isBoss = wave % 5 === 0 && st.enemies.filter((e) => e.tier === "boss").length === 0 && st.waveTime < 2;
     const elite = !isBoss && Math.random() < 0.1 + wave * 0.01;
     const tier: Enemy["tier"] = isBoss ? "boss" : elite ? "elite" : "minion";
-    const hp = tier === "boss" ? 200 + wave * 40 : tier === "elite" ? 40 + wave * 8 : 12 + wave * 3;
-    const atk = tier === "boss" ? 25 + wave : tier === "elite" ? 12 + wave / 2 : 6 + wave / 3;
-    const speed = tier === "boss" ? 55 : tier === "elite" ? 75 : 95;
-    const side = Math.floor(Math.random() * 4);
+    let hp = tier === "boss" ? 200 + wave * 40 : tier === "elite" ? 40 + wave * 8 : 12 + wave * 3;
+    let atk = tier === "boss" ? 25 + wave : tier === "elite" ? 12 + wave / 2 : 6 + wave / 3;
+    let speed = tier === "boss" ? 55 : tier === "elite" ? 75 : 95;
+
+    // Mythic global scale
+    hp = Math.round(hp * mScale.hpMul);
+    atk = atk * mScale.atkMul;
+
+    // Affix-specific scaling
+    if (mythicIds.has("fortified") && tier === "minion") hp = Math.round(hp * 1.5);
+    if (mythicIds.has("tyrannical") && (tier === "boss" || tier === "elite")) {
+      hp = Math.round(hp * 1.3);
+      atk = atk * 1.15;
+    }
+
     const r = tier === "boss" ? 26 : tier === "elite" ? 18 : 12;
+    const side = Math.floor(Math.random() * 4);
     const pos =
       side === 0 ? { x: Math.random() * ARENA_W, y: -r } :
       side === 1 ? { x: ARENA_W + r, y: Math.random() * ARENA_H } :
@@ -555,6 +567,27 @@ export function ArenaStage() {
       { x: -r, y: Math.random() * ARENA_H };
     st.enemies.push({ id: nextId(), x: pos.x, y: pos.y, hp, maxHp: hp, atk, speed, r, tier, slow: 0 });
   }
+
+  function spawnExplosive() {
+    const st = stateRef.current;
+    const x = 60 + Math.random() * (ARENA_W - 120);
+    const y = 60 + Math.random() * (ARENA_H - 120);
+    const hp = 8 + st.wave * 2;
+    st.enemies.push({
+      id: nextId(), x, y, hp, maxHp: hp, atk: 0, speed: 0, r: 9, tier: "minion",
+      slow: 0, special: "explosive", fuse: 4,
+    });
+  }
+
+  function spawnSpite(x: number, y: number) {
+    const st = stateRef.current;
+    const hp = 10 + st.wave * 2;
+    st.enemies.push({
+      id: nextId(), x, y, hp, maxHp: hp, atk: 4 + st.wave * 0.5, speed: 160, r: 8,
+      tier: "minion", slow: 0, special: "spite",
+    });
+  }
+
 
   function nearestEnemy(p: Vec, range: number) {
     const st = stateRef.current;
