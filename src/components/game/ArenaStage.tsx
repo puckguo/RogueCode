@@ -255,7 +255,7 @@ export function ArenaStage() {
       const dt = Math.min(0.05, (now - last) / 1000);
       last = now;
       const st = stateRef.current;
-      const paused = !inRun || cliStatus !== "STREAMING" || st.pendingReward;
+      const paused = !inRun || cliStatus !== "STREAMING" || st.pendingReward || !!upgradeChoices;
       if (!paused) step(dt);
       draw();
       force();
@@ -264,7 +264,7 @@ export function ArenaStage() {
     raf = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(raf);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [inRun, cliStatus]);
+  }, [inRun, cliStatus, upgradeChoices]);
 
   function fireWeapon(angOverride?: number) {
     const st = stateRef.current;
