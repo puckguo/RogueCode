@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Terminal } from "@xterm/xterm";
+import type { Terminal as XTerminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import "@xterm/xterm/css/xterm.css";
 import { useGame } from "@/game/store";
@@ -8,7 +8,7 @@ import { cq, isElectron } from "@/lib/electron";
 export function CliTerminal() {
   const { cliStatus, setCliStatus, appendCliOutput, setTokensPerSec, tick } = useGame();
   const containerRef = useRef<HTMLDivElement>(null);
-  const termRef = useRef<Terminal | null>(null);
+  const termRef = useRef<XTerminal | null>(null);
   const fitRef = useRef<FitAddon | null>(null);
   const sessionId = useRef<string | null>(null);
 
@@ -27,52 +27,64 @@ export function CliTerminal() {
   // Init xterm
   useEffect(() => {
     if (!containerRef.current) return;
-    const term = new Terminal({
-      fontFamily: "ui-monospace, SF Mono, Menlo, Consolas, monospace",
-      fontSize: 12,
-      theme: {
-        background: "#15131c",
-        foreground: "#d4ebd1",
-        cursor: "#ffb86b",
-      },
-      cursorBlink: true,
-      convertEol: true,
-      scrollback: 4000,
-    });
-    const fit = new FitAddon();
-    term.loadAddon(fit);
-    term.open(containerRef.current);
-    try { fit.fit(); } catch {}
-    termRef.current = term;
-    fitRef.current = fit;
 
-    term.onData((data) => {
-      if (sessionId.current && cq) cq.write(sessionId.current, data);
-    });
+    let term: XTerminal | null = null;
 
-    const ro = new ResizeObserver(() => {
-      try {
-        fit.fit();
-        if (sessionId.current && cq) cq.resize(sessionId.current, term.cols, term.rows);
-      } catch {}
-    });
-    ro.observe(containerRef.current);
+    async function initTerminal() {
+      const { Terminal } = await import("@xterm/xterm/lib/xterm.js");
+      term = new Terminal({
+        fontFamily: "ui-monospace, SF Mono, Menlo, Consolas, monospace",
+        fontSize: 12,
+        theme: {
+          background: "#15131c",
+          foreground: "#d4ebd1",
+          cursor: "#ffb86b",
+        },
+        cursorBlink: true,
+        convertEol: true,
+        scrollback: 4000,
+      });
+      const fit = new FitAddon();
+      term.loadAddon(fit);
+      term.open(containerRef.current);
+      try { fit.fit(); } catch {}
+      termRef.current = term;
+      fitRef.current = fit;
 
-    if (!isElectron) {
-      term.writeln("\x1b[33m⚠  Browser preview mode\x1b[0m");
-      term.writeln("This panel is a real PTY when launched as a desktop app.");
-      term.writeln("Run:  \x1b[36mnpm run electron:dev\x1b[0m  to attach to claude / aider / your shell.");
-      term.writeln("");
-      term.writeln("Browser sandbox cannot spawn local processes — the simulated game loop is disabled");
-      term.writeln("to honor your 'no mock' request. Open in Electron to play.");
-    } else {
-      cq!.listShells().then(setShells).catch(() => {});
+      term.onData((data) => {
+        if (sessionId.current && cq) cq.write(sessionId.current, data);
+      });
+
+      const ro = new ResizeObserver(() => {
+        try {
+          fit.fit();
+          if (sessionId.current && cq) cq.resize(sessionId.current, term!.cols, term!.rows);
+        } catch {}
+      });
+      ro.observe(containerRef.current);
+
+      if (!isElectron) {
+        term.writeln("\x1b[33m⚠  Browser preview mode\x1b[0m");
+        term.writeln("This panel is a real PTY when launched as a desktop app.");
+        term.writeln("Run:  \x1b[36mnpm run electron:dev\x1b[0m  to attach to claude / aider / your shell.");
+        term.writeln("");
+        term.writeln("Browser sandbox cannot spawn local processes — the simulated game loop is disabled");
+        term.writeln("to honor your 'no mock' request. Open in Electron to play.");
+      } else {
+        cq!.listShells().then(setShells).catch(() => {});
+      }
+
+      return () => {
+        ro.disconnect();
+        term?.dispose();
+        termRef.current = null;
+      };
     }
 
+    const cleanup = initTerminal();
+
     return () => {
-      ro.disconnect();
-      term.dispose();
-      termRef.current = null;
+      cleanup.then(fn => fn?.());
     };
   }, []);
 

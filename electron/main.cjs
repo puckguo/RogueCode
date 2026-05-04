@@ -34,10 +34,29 @@ function createWindow() {
     },
   });
 
+  console.log("[codequest] Window created, loading URL...");
+
+  mainWindow.webContents.on("did-finish-load", () => {
+    console.log("[codequest] Page loaded successfully");
+  });
+
+  mainWindow.webContents.on("did-fail-load", (event, errorCode, errorDescription) => {
+    console.error("[codequest] Page failed to load:", errorCode, errorDescription);
+  });
+
+  mainWindow.webContents.on("console-message", (event, level, message, line, sourceId) => {
+    if (level >= 2) { // warning or error
+      console.log("[codequest:console]", message);
+    }
+  });
+
   if (isDev) {
+    console.log("[codequest] Loading dev URL:", process.env.CODEQUEST_DEV_URL);
     mainWindow.loadURL(process.env.CODEQUEST_DEV_URL);
   } else {
-    mainWindow.loadFile(path.join(__dirname, "..", "dist", "client", "index.html"));
+    const filePath = path.join(__dirname, "..", "dist", "client", "index.html");
+    console.log("[codequest] Loading file:", filePath);
+    mainWindow.loadFile(filePath);
   }
 
   mainWindow.on("closed", () => {
@@ -70,10 +89,13 @@ function startIdleWatcher() {
 
 ipcMain.handle("pty:list-shells", () => {
   const candidates = [
+    "powershell.exe",
+    "cmd.exe",
     "claude",
+    "clauded",
     "codex",
     "aider",
-    process.env.SHELL || (process.platform === "win32" ? "powershell.exe" : "bash"),
+    process.env.SHELL || "bash",
   ];
   return candidates;
 });
@@ -87,11 +109,15 @@ ipcMain.handle("pty:spawn", (_evt, opts) => {
   const cwd = opts?.cwd && fs.existsSync(opts.cwd) ? opts.cwd : os.homedir();
   const cols = opts?.cols || 100;
   const rows = opts?.rows || 30;
+  // Add npm global bin to PATH on Windows
+  const npmGlobalBin = "C:\\Users\\Administrator\\AppData\\Roaming\\npm";
+  const currentPath = process.env.PATH || "";
+  const newPath = currentPath.includes(npmGlobalBin) ? currentPath : `${currentPath};${npmGlobalBin}`;
   try {
     const proc = pty.spawn(command, opts?.args || [], {
       name: "xterm-256color",
       cols, rows, cwd,
-      env: { ...process.env, TERM: "xterm-256color", FORCE_COLOR: "1" },
+      env: { ...process.env, PATH: newPath, TERM: "xterm-256color", FORCE_COLOR: "1" },
     });
     sessions.set(id, proc);
     sessionState.set(id, { status: "IDLE_WAITING", lastOutput: Date.now(), buffer: "" });
