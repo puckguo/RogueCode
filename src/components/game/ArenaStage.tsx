@@ -682,17 +682,42 @@ export function ArenaStage() {
             </div>
           </div>
         )}
-        {st.pendingReward && inRun && (
-          <div className="absolute inset-0 grid place-items-center bg-background/85">
-            <div className="rounded-xl border bg-card p-6 text-center">
-              <div className="text-2xl">★ Wave {st.wave - 1} cleared</div>
-              <div className="mt-2 text-xs text-muted-foreground">Loot dropped to inventory.</div>
-              <button
-                onClick={nextWave}
-                className="mt-4 rounded bg-primary px-4 py-2 font-bold text-primary-foreground"
-              >
-                Next Wave →
-              </button>
+        {upgradeChoices && inRun && (
+          <div className="absolute inset-0 grid place-items-center bg-background/90 p-4">
+            <div className="w-full max-w-2xl rounded-xl border bg-card p-5 shadow-2xl">
+              <div className="mb-1 text-center text-xs uppercase tracking-widest text-muted-foreground">
+                Wave {st.wave - 1} cleared · Choose an upgrade
+              </div>
+              <div className="mb-4 text-center text-[10px] text-muted-foreground/80">
+                Loot also dropped to your stash. Picks persist for this run.
+              </div>
+              <div className="grid grid-cols-3 gap-3">
+                {upgradeChoices.map((u) => (
+                  <button
+                    key={u.id}
+                    onClick={() => pickUpgrade(u)}
+                    className={`flex h-40 flex-col rounded-lg border-2 p-3 text-left transition hover:bg-primary/10 ${rarityBorder[u.rarity]}`}
+                  >
+                    <div className="text-[10px] uppercase opacity-70">{u.rarity}</div>
+                    <div className={`mt-1 text-sm font-bold ${rarityText[u.rarity]}`}>{u.name}</div>
+                    <div className="mt-auto text-xs text-muted-foreground">{u.desc}</div>
+                  </button>
+                ))}
+              </div>
+              <div className="mt-3 flex items-center justify-between text-[11px]">
+                <button
+                  onClick={rerollChoices}
+                  className="rounded border border-border px-2 py-1 text-muted-foreground hover:text-foreground hover:bg-muted/40"
+                >
+                  ↻ Reroll
+                </button>
+                <button
+                  onClick={() => { setUpgradeChoices(null); stateRef.current.pendingReward = false; }}
+                  className="text-muted-foreground hover:text-foreground"
+                >
+                  Skip →
+                </button>
+              </div>
             </div>
           </div>
         )}
