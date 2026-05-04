@@ -197,12 +197,23 @@ ipcMain.handle("pty:write", (_evt, { id, data }) => {
   const st = sessionState.get(id);
   if (st) {
     const now = Date.now();
+    const s = String(data);
+    // Detect mouse-event escape sequences emitted by xterm when the terminal
+    // app has mouse tracking enabled (e.g. SGR: ESC[<...M/m, X10: ESC[M...).
+    // Mouse clicks/scrolls/movement must NOT count as keyboard input and
+    // must NOT pause the game.
+    const isMouseOnly =
+      /^(\x1b\[<\d+;\d+;\d+[Mm])+$/.test(s) ||
+      /^(\x1b\[M...)+$/.test(s);
+    if (isMouseOnly) {
+      // Still forward to the PTY but skip all "user typed" bookkeeping.
+      try { proc.write(data); return { ok: true }; }
+      catch (e) { return { ok: false, error: String(e) }; }
+    }
     st.lastUserWrite = now;
-    const extra = (String(data).match(/\r/g) || []).length;
-    st.pendingEchoBytes = Math.min(2048, (st.pendingEchoBytes || 0) + String(data).length + extra);
-    // SIMPLE RULE: any user input immediately pauses the game/video.
-    // Flip to IDLE_WAITING right now and reset the AI activity window so
-    // echo/prompt-redraw cannot re-trigger STREAMING for a while.
+    const extra = (s.match(/\r/g) || []).length;
+    st.pendingEchoBytes = Math.min(2048, (st.pendingEchoBytes || 0) + s.length + extra);
+    // SIMPLE RULE: any real keyboard input immediately pauses the game/video.
     st.aiBytesWindow = 0;
     st.windowStart = now;
     if (st.status !== "IDLE_WAITING") {
