@@ -16,8 +16,20 @@ const isDev = !!process.env.CODEQUEST_DEV_URL;
 
 /** @type {Map<string, any>} */
 const sessions = new Map();
-/** @type {Map<string, { status: string, lastOutput: number, buffer: string }>} */
+/**
+ * @type {Map<string, {
+ *   status: string,
+ *   lastOutput: number,
+ *   buffer: string,
+ *   lastUserWrite: number,
+ *   pendingEchoBytes: number,
+ *   aiBytesWindow: number,
+ *   windowStart: number
+ * }>}
+ */
 const sessionState = new Map();
+const ECHO_WINDOW_MS = 200;     // data within this window after a user keypress is treated as terminal echo
+const AI_ACTIVE_THRESHOLD = 24; // need this many net AI bytes per ~400ms window to be considered STREAMING
 
 let mainWindow;
 let idleWatcher;
@@ -79,6 +91,11 @@ function startIdleWatcher() {
   idleWatcher = setInterval(() => {
     const now = Date.now();
     for (const [id, st] of sessionState.entries()) {
+      // reset rolling AI byte window
+      if (now - st.windowStart > 400) {
+        st.aiBytesWindow = 0;
+        st.windowStart = now;
+      }
       if (st.status === "STREAMING" && now - st.lastOutput > 1500) {
         st.status = "IDLE_WAITING";
         broadcast("pty:status", { id, status: "IDLE_WAITING" });
