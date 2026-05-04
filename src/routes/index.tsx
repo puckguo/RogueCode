@@ -1,6 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { useState } from "react";
 import { CliTerminal } from "@/components/game/CliTerminal";
 import { BattleStage } from "@/components/game/BattleStage";
+import { ArenaStage } from "@/components/game/ArenaStage";
 import { SidePanel } from "@/components/game/SidePanel";
 
 export const Route = createFileRoute("/")({
@@ -11,13 +13,14 @@ export const Route = createFileRoute("/")({
       {
         name: "description",
         content:
-          "A Diablo-difficulty, Grim Dawn-styled roguelike card game that's paced by your Claude Code CLI: AI streams = combat advances, AI idle = you must prompt to resume.",
+          "A Diablo-difficulty, Grim Dawn-styled roguelike paced by your Claude Code CLI. Cards mode and Brotato-style arena mode.",
       },
     ],
   }),
 });
 
 function Index() {
+  const [mode, setMode] = useState<"cards" | "arena">("cards");
   return (
     <div className="flex h-screen w-screen flex-col gap-3 overflow-hidden p-3">
       <header className="flex items-center justify-between px-2">
@@ -29,8 +32,24 @@ function Index() {
             A roguelike paced by your AI. Keep Claude Code streaming to keep the battle alive.
           </p>
         </div>
-        <div className="text-right text-[10px] text-muted-foreground">
-          v0.1 MVP · localStorage save · Electron build adds real PTY
+        <div className="flex items-center gap-2">
+          <div className="flex rounded-lg border bg-card p-0.5 text-xs">
+            <button
+              onClick={() => setMode("cards")}
+              className={`rounded px-3 py-1.5 font-bold ${mode === "cards" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}
+            >
+              🃏 Cards
+            </button>
+            <button
+              onClick={() => setMode("arena")}
+              className={`rounded px-3 py-1.5 font-bold ${mode === "arena" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}
+            >
+              🎯 Arena
+            </button>
+          </div>
+          <div className="text-right text-[10px] text-muted-foreground">
+            v0.2 · Electron build adds real PTY
+          </div>
         </div>
       </header>
 
@@ -39,7 +58,7 @@ function Index() {
           <CliTerminal />
         </div>
         <div className="col-span-5 flex min-h-0 flex-col">
-          <BattleStage />
+          {mode === "cards" ? <BattleStage /> : <ArenaStage />}
         </div>
         <div className="col-span-3 flex min-h-0 flex-col">
           <SidePanel />
