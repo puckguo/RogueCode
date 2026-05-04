@@ -753,10 +753,28 @@ export function ArenaStage() {
           <div>RoF {loadout.fireRate.toFixed(1)}/s</div>
           <div>Range {loadout.range}</div>
           {loadout.pierce > 0 && <div>Pierce +{loadout.pierce}</div>}
+          {loadout.lifesteal > 0 && <div>LS {loadout.lifesteal}%</div>}
+          {loadout.hpRegen > 0 && <div>Regen {loadout.hpRegen.toFixed(1)}/s</div>}
+          {loadout.dmgMul !== 1 && <div>Dmg ×{loadout.dmgMul.toFixed(2)}</div>}
           <div className="rounded border border-primary/40 bg-primary/10 px-2 py-0.5 text-primary">
             ◎ {FIRE_LABEL[loadout.fireMode]}
           </div>
         </div>
+
+        {runUpgrades.length > 0 && (
+          <div className="flex flex-wrap items-center gap-1">
+            <span className="text-muted-foreground">Picks:</span>
+            {runUpgrades.map((u, i) => (
+              <span
+                key={i}
+                title={u.desc}
+                className={`rounded border px-1.5 py-0.5 text-[10px] ${rarityBorder[u.rarity]} ${rarityText[u.rarity]}`}
+              >
+                {u.name}
+              </span>
+            ))}
+          </div>
+        )}
 
         {/* Skills */}
         <div className="flex flex-wrap items-center gap-2">
