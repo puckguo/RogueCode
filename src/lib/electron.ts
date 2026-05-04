@@ -3,11 +3,13 @@ declare global {
   interface Window {
     codequest?: {
       isElectron: true;
+      getPath: () => Promise<string>;
       spawn: (opts: { id?: string; command?: string; args?: string[]; cwd?: string; cols?: number; rows?: number }) => Promise<{ ok: boolean; id?: string; error?: string }>;
       write: (id: string, data: string) => Promise<{ ok: boolean }>;
       resize: (id: string, cols: number, rows: number) => Promise<{ ok: boolean }>;
       kill: (id: string) => Promise<{ ok: boolean }>;
       listShells: () => Promise<string[]>;
+      pickFolder: () => Promise<string | null>;
       watchLog: (id: string, file: string) => Promise<{ ok: boolean; error?: string }>;
       storage: {
         dir: () => Promise<string>;

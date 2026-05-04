@@ -168,9 +168,20 @@ export function CliTerminal() {
             value={cwd}
             onChange={(e) => setCwd(e.target.value)}
             disabled={running}
-            placeholder="cwd (optional)"
-            className="w-40 rounded border border-border bg-input px-2 py-1 font-mono text-[11px] outline-none disabled:opacity-50"
+            placeholder="cwd"
+            className="w-32 rounded border border-border bg-input px-2 py-1 font-mono text-[11px] outline-none disabled:opacity-50"
           />
+          <button
+            onClick={async () => {
+              if (!cq) return;
+              const folder = await cq.pickFolder();
+              if (folder) setCwd(folder);
+            }}
+            disabled={running}
+            className="rounded border border-border bg-secondary px-2 py-1 text-[11px] text-secondary-foreground hover:bg-secondary/80 disabled:opacity-50"
+          >
+            📁 Browse
+          </button>
           {!running ? (
             <button onClick={start} className="rounded bg-primary px-2 py-1 text-[11px] font-bold text-primary-foreground hover:opacity-90">
               ▶ Spawn

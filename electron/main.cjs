@@ -1,6 +1,6 @@
 // Electron main process
 // Spawns user's CLI (e.g. `claude`) under a real PTY and bridges data to the renderer.
-const { app, BrowserWindow, ipcMain } = require("electron");
+const { app, BrowserWindow, ipcMain, dialog } = require("electron");
 const path = require("path");
 const fs = require("fs");
 const os = require("os");
@@ -99,6 +99,7 @@ ipcMain.handle("pty:list-shells", () => {
   ];
   return candidates;
 });
+ipcMain.handle("pty:get-path", () => {  return process.env.PATH || "";});
 
 ipcMain.handle("pty:spawn", (_evt, opts) => {
   if (!pty) {
@@ -109,15 +110,15 @@ ipcMain.handle("pty:spawn", (_evt, opts) => {
   const cwd = opts?.cwd && fs.existsSync(opts.cwd) ? opts.cwd : os.homedir();
   const cols = opts?.cols || 100;
   const rows = opts?.rows || 30;
-  // Add npm global bin to PATH on Windows
-  const npmGlobalBin = "C:\\Users\\Administrator\\AppData\\Roaming\\npm";
-  const currentPath = process.env.PATH || "";
-  const newPath = currentPath.includes(npmGlobalBin) ? currentPath : `${currentPath};${npmGlobalBin}`;
+  // Preserve full user PATH and ensure npm bin is accessible
+  const userPath = process.env.PATH || "";
+  const npmBin = "C:\\Users\\Administrator\\AppData\\Roaming\\npm";
+  const fullPath = userPath.includes(npmBin) ? userPath : `${userPath};${npmBin}`;
   try {
     const proc = pty.spawn(command, opts?.args || [], {
       name: "xterm-256color",
       cols, rows, cwd,
-      env: { ...process.env, PATH: newPath, TERM: "xterm-256color", FORCE_COLOR: "1" },
+      env: { ...process.env, PATH: fullPath, TERM: "xterm-256color", FORCE_COLOR: "1" },
     });
     sessions.set(id, proc);
     sessionState.set(id, { status: "IDLE_WAITING", lastOutput: Date.now(), buffer: "" });
@@ -194,6 +195,16 @@ ipcMain.handle("logwatch:start", (_evt, { id, file }) => {
   startIdleWatcher();
   sessions.set(id, { kill: () => watcher.close() });
   return { ok: true };
+});
+
+// =================== Folder picker dialog ===================
+ipcMain.handle("dialog:pick-folder", async () => {
+  const result = await dialog.showOpenDialog(mainWindow, {
+    properties: ["openDirectory"],
+    title: "Select working directory for PTY",
+  });
+  if (result.canceled || result.filePaths.length === 0) return null;
+  return result.filePaths[0];
 });
 
 // =================== Local .md storage ===================

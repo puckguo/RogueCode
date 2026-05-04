@@ -2,11 +2,13 @@ const { contextBridge, ipcRenderer } = require("electron");
 
 contextBridge.exposeInMainWorld("codequest", {
   isElectron: true,
+  getPath: () => ipcRenderer.invoke("pty:get-path"),
   spawn: (opts) => ipcRenderer.invoke("pty:spawn", opts),
   write: (id, data) => ipcRenderer.invoke("pty:write", { id, data }),
   resize: (id, cols, rows) => ipcRenderer.invoke("pty:resize", { id, cols, rows }),
   kill: (id) => ipcRenderer.invoke("pty:kill", { id }),
   listShells: () => ipcRenderer.invoke("pty:list-shells"),
+  pickFolder: () => ipcRenderer.invoke("dialog:pick-folder"),
   watchLog: (id, file) => ipcRenderer.invoke("logwatch:start", { id, file }),
   storage: {
     dir: () => ipcRenderer.invoke("storage:dir"),
