@@ -905,8 +905,8 @@ export function ArenaStage() {
           <div className="absolute inset-0 grid place-items-center bg-background/80 backdrop-blur-sm">
             <div className="text-center">
               <div className="text-5xl">⏸</div>
-              <div className="mt-2 font-bold">AI is idle</div>
-              <div className="text-xs text-muted-foreground">Send a prompt to your CLI to resume.</div>
+              <div className="mt-2 font-bold">{idleCount > 0 ? `${idleCount} CLI idle` : "AI is idle"}</div>
+              <div className="text-xs text-muted-foreground">Send a prompt to the blinking CLI tab to resume.</div>
             </div>
           </div>
         )}
