@@ -82,16 +82,66 @@ export function BrowserStage() {
         setInput(e.url);
       }
     };
+    // Newer Electron event name.
+    const onWillNavigate = (e: any) => {
+      if (e?.url) setInput(e.url);
+    };
+    // Inject a script that rewrites all _blank targets to _self and overrides
+    // window.open to navigate the current page instead of opening a popup.
+    // This is the most reliable way to keep video playback inside our webview.
+    const REWRITE_JS = `
+      (function(){
+        try {
+          if (window.__cqRewroteOpen) return;
+          window.__cqRewroteOpen = true;
+          const _open = window.open;
+          window.open = function(url){
+            if (url) { try { window.location.href = url; } catch(e){} }
+            return null;
+          };
+          const fix = (root) => {
+            try {
+              root.querySelectorAll('a[target="_blank"], a[target=_blank]').forEach(a => {
+                a.setAttribute('target','_self');
+                a.removeAttribute('rel');
+              });
+              root.querySelectorAll('base[target]').forEach(b => b.setAttribute('target','_self'));
+            } catch(e){}
+          };
+          fix(document);
+          const mo = new MutationObserver(() => fix(document));
+          mo.observe(document.documentElement, {childList:true, subtree:true, attributes:true, attributeFilter:['target']});
+          // Capture-phase click handler as a final safety net.
+          document.addEventListener('click', (ev) => {
+            const a = ev.target && ev.target.closest && ev.target.closest('a[target]');
+            if (a && a.target && a.target !== '_self' && a.href) {
+              ev.preventDefault();
+              ev.stopPropagation();
+              window.location.href = a.href;
+            }
+          }, true);
+        } catch(e){}
+      })();
+    `;
+    const onDomReady = () => {
+      try { wv.executeJavaScript(REWRITE_JS, true); } catch {}
+    };
     wv.addEventListener("did-start-loading", onStart);
     wv.addEventListener("did-stop-loading", onStop);
     wv.addEventListener("did-navigate", onNav);
     wv.addEventListener("did-navigate-in-page", onNav);
+    wv.addEventListener("did-frame-finish-load", onDomReady);
+    wv.addEventListener("dom-ready", onDomReady);
+    wv.addEventListener("will-navigate", onWillNavigate);
     wv.addEventListener("new-window", onNewWindow);
     return () => {
       wv.removeEventListener("did-start-loading", onStart);
       wv.removeEventListener("did-stop-loading", onStop);
       wv.removeEventListener("did-navigate", onNav);
       wv.removeEventListener("did-navigate-in-page", onNav);
+      wv.removeEventListener("did-frame-finish-load", onDomReady);
+      wv.removeEventListener("dom-ready", onDomReady);
+      wv.removeEventListener("will-navigate", onWillNavigate);
       wv.removeEventListener("new-window", onNewWindow);
     };
   }, [electron]);
