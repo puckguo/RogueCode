@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { Card, CliStatus, Enemy, Item, Rarity, TalentNode } from "./types";
+import type { Card, CliSession, CliStatus, Enemy, Item, MythicAffix, Rarity, TalentNode } from "./types";
 import {
   AFFIX_POOL,
   ITEM_NAMES,
@@ -9,6 +9,7 @@ import {
   rollEnemy,
   rollRarity,
   RARITY_AFFIX_COUNT,
+  rollMythicAffixes,
 } from "./data";
 import { writeSaveMd, readSaveMd, writeSkillMd, writeStateMd, appendLogMd } from "./mdStorage";
 
