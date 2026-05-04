@@ -3,6 +3,7 @@ import { useState } from "react";
 import { CliTerminal } from "@/components/game/CliTerminal";
 import { BattleStage } from "@/components/game/BattleStage";
 import { ArenaStage } from "@/components/game/ArenaStage";
+import { BrowserStage } from "@/components/game/BrowserStage";
 import { SidePanel } from "@/components/game/SidePanel";
 
 export const Route = createFileRoute("/")({
@@ -20,7 +21,7 @@ export const Route = createFileRoute("/")({
 });
 
 function Index() {
-  const [mode, setMode] = useState<"cards" | "arena">("cards");
+  const [mode, setMode] = useState<"cards" | "arena" | "browser">("cards");
   return (
     <div className="flex h-screen w-screen flex-col gap-3 overflow-hidden p-3">
       <header className="flex items-center justify-between px-2">
@@ -46,6 +47,12 @@ function Index() {
             >
               🎯 Arena
             </button>
+            <button
+              onClick={() => setMode("browser")}
+              className={`rounded px-3 py-1.5 font-bold ${mode === "browser" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}
+            >
+              🌐 Browser
+            </button>
           </div>
           <div className="text-right text-[10px] text-muted-foreground">
             v0.2 · Electron build adds real PTY
@@ -58,7 +65,7 @@ function Index() {
           <CliTerminal />
         </div>
         <div className="col-span-5 flex min-h-0 flex-col">
-          {mode === "cards" ? <BattleStage /> : <ArenaStage />}
+          {mode === "cards" ? <BattleStage /> : mode === "arena" ? <ArenaStage /> : <BrowserStage />}
         </div>
         <div className="col-span-3 flex min-h-0 flex-col">
           <SidePanel />
