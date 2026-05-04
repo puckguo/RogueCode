@@ -28,8 +28,9 @@ const sessions = new Map();
  * }>}
  */
 const sessionState = new Map();
-const ECHO_WINDOW_MS = 200;     // data within this window after a user keypress is treated as terminal echo
-const AI_ACTIVE_THRESHOLD = 24; // need this many net AI bytes per ~400ms window to be considered STREAMING
+const ECHO_WINDOW_MS = 600;       // data within this window after a user keypress is treated as terminal echo
+const USER_TYPING_LOCKOUT_MS = 1500; // after a user keypress, refuse to flip IDLE→STREAMING for this long
+const AI_ACTIVE_THRESHOLD = 80;   // need this many net AI bytes per ~400ms window to be considered STREAMING
 
 let mainWindow;
 let idleWatcher;
@@ -164,7 +165,11 @@ ipcMain.handle("pty:spawn", (_evt, opts) => {
 
         // Flip to STREAMING only when the AI is producing meaningful output,
         // not when the user is just typing into the terminal.
-        if (st.aiBytesWindow >= AI_ACTIVE_THRESHOLD) {
+        // HARD LOCKOUT: while the user has typed in the recent past, never
+        // mark the session as active — every byte in this window is treated
+        // as echo / prompt redraw, regardless of size.
+        const inTypingLockout = now - st.lastUserWrite < USER_TYPING_LOCKOUT_MS;
+        if (!inTypingLockout && st.aiBytesWindow >= AI_ACTIVE_THRESHOLD) {
           st.lastOutput = now;
           if (st.status !== "STREAMING") {
             st.status = "STREAMING";
