@@ -27,16 +27,34 @@ type DerivedLoadout = {
   projSpeed: number;
   range: number;
   pierce: number;
+  dmgMul: number;
+  magnet: number;        // pickup-magnet radius bonus
+  hpRegen: number;       // hp/sec
+  lifesteal: number;     // %
+  speedBonus: number;    // additive move speed
   skills: SkillState[];
 };
 
-function deriveLoadout(equipment: Record<string, Item | undefined>): DerivedLoadout {
+function deriveLoadout(
+  equipment: Record<string, Item | undefined>,
+  talentRanks: Record<string, number>,
+  runUpgrades: ArenaUpgrade[],
+): DerivedLoadout {
   let fireMode: FireMode = "normal";
   let fireRate = 2.5;
   let projSpeed = 480;
   let range = 320;
   let pierce = 0;
-  const skills: SkillState[] = [];
+  let dmgMul = 1;
+  let magnet = 0;
+  let hpRegen = 0;
+  let lifesteal = 0;
+  let speedBonus = 0;
+  let skillCdMul = 1; // multiplier; 0.85 = -15% cd
+
+  const skillEntries: Array<{ kind: SkillKind; cd: number }> = [];
+
+  // Equipment affixes
   for (const it of Object.values(equipment)) {
     if (!it) continue;
     for (const a of it.affixes) {
@@ -45,15 +63,67 @@ function deriveLoadout(equipment: Record<string, Item | undefined>): DerivedLoad
       if (a.projSpeed) projSpeed += a.projSpeed;
       if (a.range) range += a.range;
       if (a.pierce) pierce += a.pierce;
-      if (a.skill && a.skillCd) {
-        // dedupe by kind, keep lowest cd
-        const exist = skills.find((s) => s.kind === a.skill);
-        if (exist) exist.max = Math.min(exist.max, a.skillCd);
-        else skills.push({ kind: a.skill, cd: 0, max: a.skillCd, ready: 1 });
-      }
+      if (a.lifesteal) lifesteal += a.lifesteal;
+      if (a.skill && a.skillCd) skillEntries.push({ kind: a.skill, cd: a.skillCd });
     }
   }
-  return { fireMode, fireRate, projSpeed, range, pierce, skills };
+
+  // Talents
+  for (const [id, rank] of Object.entries(talentRanks)) {
+    if (!rank) continue;
+    // Match by id prefix → known effects (mirrors data.ts)
+    // We rely on effect carried via the actual TALENT_TREE walk instead — see below.
+  }
+  // Use the actual TALENT_TREE-resolved effects via dynamic import-free lookup.
+  // (We import TALENT_TREE only to read effects — but to avoid a circular import here,
+  // we do a tiny inline walk via a list of known effect keys.)
+  // Simpler: re-import.
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { TALENT_TREE } = require("@/game/data") as typeof import("@/game/data");
+  for (const node of TALENT_TREE) {
+    const r = talentRanks[node.id] || 0;
+    if (!r) continue;
+    fireRate += (node.effect.fireRate || 0) * r;
+    projSpeed += (node.effect.projSpeed || 0) * r;
+    range += (node.effect.range || 0) * r;
+    pierce += (node.effect.pierce || 0) * r;
+    speedBonus += (node.effect.speed || 0) * r;
+    magnet += (node.effect.magnet || 0) * r;
+    hpRegen += (node.effect.hpRegen || 0) * r;
+    lifesteal += (node.effect.lifesteal || 0) * r;
+    skillCdMul *= 1 - (node.effect.skillCdMul || 0) * r;
+  }
+
+  // In-run upgrades
+  for (const u of runUpgrades) {
+    if (u.fireRate) fireRate += u.fireRate;
+    if (u.projSpeed) projSpeed += u.projSpeed;
+    if (u.range) range += u.range;
+    if (u.pierce) pierce += u.pierce;
+    if (u.dmgMul) dmgMul *= u.dmgMul;
+    if (u.magnet) magnet += u.magnet;
+    if (u.hpRegen) hpRegen += u.hpRegen;
+    if (u.lifesteal) lifesteal += u.lifesteal;
+    if (u.speed) speedBonus += u.speed;
+    if (u.setFireMode) fireMode = u.setFireMode;
+    if (u.skillCdMul) skillCdMul *= u.skillCdMul;
+    if (u.grantSkill) {
+      const cd = u.grantSkill === "missile" ? 5 : u.grantSkill === "nova" ? 6 : u.grantSkill === "laser" ? 9 : 12;
+      skillEntries.push({ kind: u.grantSkill, cd });
+    }
+  }
+
+  // Dedupe skills by kind (keep min cd) and apply skillCdMul
+  const byKind = new Map<SkillKind, number>();
+  for (const sk of skillEntries) {
+    const cur = byKind.get(sk.kind);
+    byKind.set(sk.kind, cur === undefined ? sk.cd : Math.min(cur, sk.cd));
+  }
+  const skills: SkillState[] = Array.from(byKind.entries()).map(([kind, cd]) => ({
+    kind, cd: 0, max: Math.max(1, cd * skillCdMul), ready: 1,
+  }));
+
+  return { fireMode, fireRate, projSpeed, range, pierce, dmgMul, magnet, hpRegen, lifesteal, speedBonus, skills };
 }
 
 const SKILL_LABEL: Record<SkillKind, { name: string; icon: string }> = {
