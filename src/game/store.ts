@@ -71,13 +71,17 @@ function shuffle<T>(arr: T[]): T[] {
 type Buff = { atk: number; crit: number; turns: number };
 
 type State = {
-  // CLI
+  // CLI (active session — kept for back-compat with existing UI)
   cliStatus: CliStatus;
   cliBuffer: string;
   tokensPerSec: number;
   combo: number;
   comboTimer: number;
   pendingPrompt: string;
+
+  // Multi-CLI: tabs the user can switch between
+  sessions: CliSession[];
+  activeSessionId: string | null;
 
   // Run
   inRun: boolean;
@@ -102,6 +106,10 @@ type State = {
   totalPoints: number;
   stash: Item[];
 
+  // Mythic Keystone (Arena difficulty)
+  mythicLevel: number;
+  mythicAffixes: MythicAffix[];
+
   // Coding-behavior hooks
   nextDropLegendary: boolean;
   recentEvents: { ts: number; text: string }[];
@@ -113,6 +121,13 @@ type State = {
   setTokensPerSec: (n: number) => void;
   submitPrompt: (prompt: string) => void;
   setPendingPrompt: (s: string) => void;
+
+  // Multi-CLI actions
+  addSession: (label?: string) => string;
+  removeSession: (id: string) => void;
+  setActiveSession: (id: string) => void;
+  renameSession: (id: string, label: string) => void;
+  updateSessionStatus: (id: string, status: CliStatus, hasStarted?: boolean) => void;
 
   startRun: () => void;
   endRun: () => void;
@@ -131,9 +146,20 @@ type State = {
   setShardsAdd: (n: number) => void;
   addInventoryItem: (it: Item, consumeLegendary?: boolean) => void;
 
+  // Mythic actions
+  setMythicLevel: (n: number) => void;
+  rerollMythicAffixes: () => void;
+
   tick: () => void;
   winWave: () => void;
 };
+
+// Derived helper (call with current state). Game is paused if ANY started CLI is not streaming.
+export function isAnyCliIdle(s: Pick<State, "sessions">): boolean {
+  const started = s.sessions.filter((x) => x.hasStarted);
+  if (started.length === 0) return true; // no CLI at all → paused
+  return started.some((x) => x.status !== "STREAMING");
+}
 
 function computeStats(s: Pick<State, "talentRanks" | "equipment">) {
   let atk = 5;
