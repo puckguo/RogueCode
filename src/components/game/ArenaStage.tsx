@@ -411,6 +411,9 @@ export function ArenaStage() {
         const hitR = e.r + (b.size ?? 4);
         if (Math.hypot(e.x - b.x, e.y - b.y) < hitR) {
           e.hp -= b.dmg;
+          if (loadout.lifesteal > 0) {
+            p.hp = Math.min(p.maxHp, p.hp + (b.dmg * loadout.lifesteal) / 100);
+          }
           if (b.aoe) {
             st.fx.push({ id: nextId(), x: b.x, y: b.y, r: 0, maxR: b.aoe, life: 0.3, maxLife: 0.3, color: b.color || "#fb923c" });
             for (const e2 of st.enemies) {
@@ -426,6 +429,11 @@ export function ArenaStage() {
       }
     }
     st.bullets = st.bullets.filter((b) => b.life > 0 && b.x > -20 && b.x < ARENA_W + 20 && b.y > -20 && b.y < ARENA_H + 20);
+
+    // passive HP regen
+    if (loadout.hpRegen > 0 && p.hp < p.maxHp) {
+      p.hp = Math.min(p.maxHp, p.hp + loadout.hpRegen * dt);
+    }
 
     // enemies
     for (const e of st.enemies) {
