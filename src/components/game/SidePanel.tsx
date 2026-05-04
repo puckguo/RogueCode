@@ -98,6 +98,7 @@ export function SidePanel() {
     runSummary,
     dismissRunSummary,
   } = useGame();
+  const [talentMax, setTalentMax] = useState(false);
   const { mythicLevel, mythicAffixes, setMythicLevel, rerollMythicAffixes } = useGame() as any;
 
   const slots: Item["slot"][] = ["weapon", "armor", "helm", "boots", "ring", "amulet"];
