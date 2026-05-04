@@ -28,8 +28,9 @@ const sessions = new Map();
  * }>}
  */
 const sessionState = new Map();
-const ECHO_WINDOW_MS = 200;     // data within this window after a user keypress is treated as terminal echo
-const AI_ACTIVE_THRESHOLD = 24; // need this many net AI bytes per ~400ms window to be considered STREAMING
+const ECHO_WINDOW_MS = 600;       // data within this window after a user keypress is treated as terminal echo
+const USER_TYPING_LOCKOUT_MS = 1500; // after a user keypress, refuse to flip IDLE→STREAMING for this long
+const AI_ACTIVE_THRESHOLD = 80;   // need this many net AI bytes per ~400ms window to be considered STREAMING
 
 let mainWindow;
 let idleWatcher;
