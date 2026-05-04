@@ -785,13 +785,43 @@ export function ArenaStage() {
       }
     }
 
+    // Sanguine pools (under enemies)
+    for (const pool of st.sanguinePools) {
+      const a = Math.min(1, pool.life / 6);
+      ctx.fillStyle = `rgba(220,38,38,${0.25 * a})`;
+      ctx.beginPath(); ctx.arc(pool.x, pool.y, 40, 0, Math.PI * 2); ctx.fill();
+    }
+    // Volcanic warning circles
+    for (const v of st.volcanoWarn) {
+      if (v.warn > 0) {
+        ctx.strokeStyle = `rgba(251,146,60,${0.5 + 0.5 * Math.sin(v.warn * 8)})`;
+        ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.arc(v.x, v.y, v.r, 0, Math.PI * 2); ctx.stroke();
+        ctx.lineWidth = 1;
+      }
+    }
+
     for (const pk of st.pickups) {
       ctx.fillStyle = pk.kind === "shard" ? "#7dd3fc" : "#f87171";
       ctx.beginPath(); ctx.arc(pk.x, pk.y, 4, 0, Math.PI * 2); ctx.fill();
     }
     for (const e of st.enemies) {
-      ctx.fillStyle = e.tier === "boss" ? "#f59e0b" : e.tier === "elite" ? "#a78bfa" : "#ef4444";
+      ctx.fillStyle = e.special === "explosive"
+        ? "#fb923c"
+        : e.special === "spite"
+          ? "#c084fc"
+          : e.tier === "boss" ? "#f59e0b" : e.tier === "elite" ? "#a78bfa" : "#ef4444";
       ctx.beginPath(); ctx.arc(e.x, e.y, e.r, 0, Math.PI * 2); ctx.fill();
+      if (e.special === "explosive" && e.fuse !== undefined) {
+        ctx.strokeStyle = `rgba(251,146,60,${0.4 + 0.6 * Math.sin(e.fuse * 12)})`;
+        ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.arc(e.x, e.y, e.r + 4, 0, Math.PI * 2); ctx.stroke();
+        ctx.lineWidth = 1;
+      }
+      if (e.bolster) {
+        ctx.strokeStyle = "rgba(250,204,21,0.7)";
+        ctx.beginPath(); ctx.arc(e.x, e.y, e.r + 2, 0, Math.PI * 2); ctx.stroke();
+      }
       if (e.slow > 0) {
         ctx.strokeStyle = "rgba(148,163,184,0.7)";
         ctx.beginPath(); ctx.arc(e.x, e.y, e.r + 3, 0, Math.PI * 2); ctx.stroke();
