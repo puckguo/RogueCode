@@ -264,58 +264,71 @@ export function SidePanel() {
         <div className="rounded-lg border bg-card p-3">
           <div className="mb-2 flex items-center justify-between text-xs font-bold uppercase tracking-wider text-muted-foreground">
             <span>Talent Tree (Engineer)</span>
-            <button onClick={refundAllTalents} className="text-[10px] font-normal text-muted-foreground hover:text-primary">
-              Respec (25 ⟡)
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setTalentMax(true)}
+                className="text-[10px] font-normal text-muted-foreground hover:text-primary"
+                title="Maximize"
+              >
+                ⛶ Expand
+              </button>
+              <button onClick={refundAllTalents} className="text-[10px] font-normal text-muted-foreground hover:text-primary">
+                Respec (25 ⟡)
+              </button>
+            </div>
           </div>
-          <div className="relative h-44 rounded bg-background/40">
-            {/* connections */}
-            <svg className="absolute inset-0 h-full w-full">
-              {TALENT_TREE.map((n) =>
-                (n.requires || []).map((r) => {
-                  const p = TALENT_TREE.find((x) => x.id === r);
-                  if (!p) return null;
-                  return (
-                    <line
-                      key={`${n.id}-${r}`}
-                      x1={`${p.x}%`}
-                      y1={`${p.y}%`}
-                      x2={`${n.x}%`}
-                      y2={`${n.y}%`}
-                      stroke="currentColor"
-                      className={(talentRanks[r] || 0) > 0 ? "text-primary/70" : "text-border"}
-                      strokeWidth={1.5}
-                    />
-                  );
-                })
-              )}
-            </svg>
-            {TALENT_TREE.map((n) => {
-              const rank = talentRanks[n.id] || 0;
-              const unlocked = !n.requires || n.requires.every((r) => (talentRanks[r] || 0) > 0);
-              const maxed = rank >= n.maxRank;
-              return (
-                <button
-                  key={n.id}
-                  onClick={() => spendTalent(n.id)}
-                  title={`${n.name}\n${n.desc}\n${rank}/${n.maxRank}`}
-                  className={`absolute -translate-x-1/2 -translate-y-1/2 rounded-full border-2 text-[10px] font-bold transition ${
-                    rank > 0
-                      ? "border-primary bg-primary text-primary-foreground"
-                      : unlocked
-                        ? "border-primary/50 bg-card hover:border-primary"
-                        : "border-border bg-card/50 opacity-40 cursor-not-allowed"
-                  } ${maxed ? "ring-2 ring-rarity-legendary" : ""} grid size-8 place-items-center`}
-                  style={{ left: `${n.x}%`, top: `${n.y}%` }}
-                  disabled={!unlocked || maxed || totalPoints <= 0}
-                >
-                  {rank}/{n.maxRank}
-                </button>
-              );
-            })}
-          </div>
+          <TalentTreeView
+            talentRanks={talentRanks}
+            spendTalent={spendTalent}
+            totalPoints={totalPoints}
+            expanded={false}
+          />
         </div>
       </div>
+
+      {/* Talent maximize modal */}
+      <AnimatePresence>
+        {talentMax && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 grid place-items-center bg-background/90 backdrop-blur-sm p-6"
+            onClick={() => setTalentMax(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.95 }}
+              animate={{ scale: 1 }}
+              onClick={(e) => e.stopPropagation()}
+              className="flex h-[90vh] w-[min(1400px,95vw)] flex-col rounded-xl border bg-card p-5 shadow-2xl"
+            >
+              <div className="mb-3 flex items-center justify-between">
+                <div>
+                  <div className="text-lg font-bold">Talent Tree — Engineer</div>
+                  <div className="text-xs text-muted-foreground">
+                    {Object.entries(TALENT_BRANCHES).map(([k, v]) => (
+                      <span key={k} className={`mr-3 ${v.color}`}>{v.short} {v.name}</span>
+                    ))}
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className="text-xs text-muted-foreground">Pts left: <b className="text-primary">{totalPoints}</b></span>
+                  <button onClick={refundAllTalents} className="rounded border px-2 py-1 text-[11px] hover:border-primary">Respec (25 ⟡)</button>
+                  <button onClick={() => setTalentMax(false)} className="rounded border px-2 py-1 text-[11px] hover:border-primary">Close ✕</button>
+                </div>
+              </div>
+              <div className="min-h-0 flex-1">
+                <TalentTreeView
+                  talentRanks={talentRanks}
+                  spendTalent={spendTalent}
+                  totalPoints={totalPoints}
+                  expanded={true}
+                />
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Reward modal */}
       <AnimatePresence>
