@@ -1,4 +1,4 @@
-import type { Affix, Card, Enemy, Rarity, TalentNode } from "./types";
+import type { Affix, ArenaUpgrade, Card, Enemy, Rarity, TalentNode } from "./types";
 
 export const RARITY_LABEL: Record<Rarity, string> = {
   common: "Common",
