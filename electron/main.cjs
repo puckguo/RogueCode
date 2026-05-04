@@ -165,7 +165,11 @@ ipcMain.handle("pty:spawn", (_evt, opts) => {
 
         // Flip to STREAMING only when the AI is producing meaningful output,
         // not when the user is just typing into the terminal.
-        if (st.aiBytesWindow >= AI_ACTIVE_THRESHOLD) {
+        // HARD LOCKOUT: while the user has typed in the recent past, never
+        // mark the session as active — every byte in this window is treated
+        // as echo / prompt redraw, regardless of size.
+        const inTypingLockout = now - st.lastUserWrite < USER_TYPING_LOCKOUT_MS;
+        if (!inTypingLockout && st.aiBytesWindow >= AI_ACTIVE_THRESHOLD) {
           st.lastOutput = now;
           if (st.status !== "STREAMING") {
             st.status = "STREAMING";
