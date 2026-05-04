@@ -469,25 +469,139 @@ export function ArenaStage() {
     }
 
     // enemies
+    const raging = mythicIds.has("raging");
+    const necrotic = mythicIds.has("necrotic");
     for (const e of st.enemies) {
       const slowMul = e.slow > 0 ? 0.4 : 1;
       e.slow = Math.max(0, e.slow - dt);
+      // explosive orbs don't move
+      if (e.special === "explosive") {
+        e.fuse = (e.fuse ?? 4) - dt;
+        if (e.fuse <= 0) {
+          // detonate
+          st.fx.push({ id: nextId(), x: e.x, y: e.y, r: 0, maxR: 100, life: 0.4, maxLife: 0.4, color: "#fb923c" });
+          if (Math.hypot(e.x - p.x, e.y - p.y) < 100) p.hp -= 18 + st.wave;
+          e.hp = 0;
+        }
+        continue;
+      }
+      const lowHp = e.hp / e.maxHp < 0.5;
+      const rage = raging && lowHp ? 1.5 : 1;
       const ang = Math.atan2(p.y - e.y, p.x - e.x);
-      e.x += Math.cos(ang) * e.speed * slowMul * dt;
-      e.y += Math.sin(ang) * e.speed * slowMul * dt;
+      e.x += Math.cos(ang) * e.speed * slowMul * rage * dt;
+      e.y += Math.sin(ang) * e.speed * slowMul * rage * dt;
       if (Math.hypot(e.x - p.x, e.y - p.y) < e.r + p.r) {
         p.hp -= e.atk * dt * 2;
+        if (necrotic) {
+          p.necroticStacks = Math.min(20, p.necroticStacks + dt * 2);
+        }
       }
     }
 
-    // dead enemies → pickups
+    // necrotic DoT tick
+    if (necrotic && p.necroticStacks > 0) {
+      p.necroticTimer += dt;
+      if (p.necroticTimer >= 1) {
+        p.hp -= p.necroticStacks * 0.6;
+        p.necroticTimer = 0;
+        // small decay
+        p.necroticStacks = Math.max(0, p.necroticStacks - 1);
+      }
+    }
+
+    // dead enemies → pickups + mythic on-death effects
+    const bursting = mythicIds.has("bursting");
+    const bolstering = mythicIds.has("bolstering");
+    const sanguine = mythicIds.has("sanguine");
+    const spiteful = mythicIds.has("spiteful");
     for (const e of st.enemies) {
       if (e.hp <= 0) {
         st.kills++;
         st.pickups.push({ id: nextId(), x: e.x, y: e.y, kind: Math.random() < 0.1 ? "heal" : "shard" });
+        if (e.special !== "explosive" && e.special !== "spite") {
+          if (bursting) {
+            st.fx.push({ id: nextId(), x: e.x, y: e.y, r: 0, maxR: 60, life: 0.35, maxLife: 0.35, color: "#f43f5e" });
+            if (Math.hypot(e.x - p.x, e.y - p.y) < 60) p.hp -= 8 + st.wave * 0.5;
+          }
+          if (bolstering) {
+            for (const e2 of st.enemies) {
+              if (e2 === e || e2.hp <= 0) continue;
+              if (Math.hypot(e2.x - e.x, e2.y - e.y) < 90) {
+                e2.atk *= 1.1; e2.hp = Math.min(e2.maxHp * 1.2, e2.hp + e2.maxHp * 0.15); e2.maxHp *= 1.1;
+                e2.bolster = (e2.bolster ?? 0) + 1;
+              }
+            }
+          }
+          if (sanguine) {
+            st.sanguinePools.push({ x: e.x, y: e.y, life: 6 });
+          }
+          if (spiteful && Math.random() < 0.7) {
+            spawnSpite(e.x, e.y);
+          }
+        }
       }
     }
     st.enemies = st.enemies.filter((e) => e.hp > 0);
+
+    // sanguine pools heal nearby enemies & slow player
+    if (st.sanguinePools.length) {
+      for (const pool of st.sanguinePools) {
+        pool.life -= dt;
+        for (const e of st.enemies) {
+          if (Math.hypot(e.x - pool.x, e.y - pool.y) < 40) {
+            e.hp = Math.min(e.maxHp, e.hp + 10 * dt);
+          }
+        }
+        if (Math.hypot(p.x - pool.x, p.y - pool.y) < 40) {
+          // slow movement (handled by reducing computed speed bonus this frame is hard;
+          // instead apply a position pull-back: shave 30% movement we already did this frame)
+          // Effectively damping via re-setting position toward previous would be complex; small dmg instead:
+          p.hp -= 2 * dt;
+        }
+      }
+      st.sanguinePools = st.sanguinePools.filter((x) => x.life > 0);
+    }
+
+    // Mythic periodic events
+    if (mythicIds.has("volcanic")) {
+      st.volcanicCd -= dt;
+      if (st.volcanicCd <= 0) {
+        st.volcanicCd = 3 + Math.random() * 2;
+        st.volcanoWarn.push({ x: p.x + (Math.random() - 0.5) * 80, y: p.y + (Math.random() - 0.5) * 80, warn: 1.0, r: 50 });
+      }
+    }
+    for (const v of st.volcanoWarn) {
+      v.warn -= dt;
+      if (v.warn <= 0 && v.warn > -0.05) {
+        st.fx.push({ id: nextId(), x: v.x, y: v.y, r: 0, maxR: v.r, life: 0.4, maxLife: 0.4, color: "#fb923c" });
+        if (Math.hypot(p.x - v.x, p.y - v.y) < v.r) p.hp -= 14 + st.wave;
+      }
+    }
+    st.volcanoWarn = st.volcanoWarn.filter((v) => v.warn > -0.1);
+
+    if (mythicIds.has("quaking")) {
+      st.quakeCd -= dt;
+      if (st.quakeCd <= 0) {
+        st.quakeCd = 5;
+        st.fx.push({ id: nextId(), x: p.x, y: p.y, r: 0, maxR: 110, life: 0.5, maxLife: 0.5, color: "#94a3b8" });
+        p.hp -= 10 + st.wave * 0.5;
+      }
+    }
+    if (mythicIds.has("afflicted")) {
+      st.afflictedCd -= dt;
+      if (st.afflictedCd <= 0) {
+        st.afflictedCd = 4;
+        p.hp -= 6 + st.wave * 0.4;
+        st.fx.push({ id: nextId(), x: p.x, y: p.y, r: 0, maxR: 30, life: 0.3, maxLife: 0.3, color: "#a855f7" });
+      }
+    }
+    if (mythicIds.has("explosive")) {
+      st.explosiveCd -= dt;
+      if (st.explosiveCd <= 0) {
+        st.explosiveCd = 8;
+        spawnExplosive();
+      }
+    }
 
     // fx tick
     for (const f of st.fx) {
