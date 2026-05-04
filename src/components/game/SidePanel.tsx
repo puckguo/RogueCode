@@ -70,6 +70,105 @@ function ItemTile({
   );
 }
 
+function TalentTreeView({
+  talentRanks,
+  spendTalent,
+  totalPoints,
+  expanded,
+}: {
+  talentRanks: Record<string, number>;
+  spendTalent: (id: string) => void;
+  totalPoints: number;
+  expanded: boolean;
+}) {
+  const branchAnchors: { branch: BranchKey; x: number; y: number; align: string }[] = [
+    { branch: "offense", x: 2, y: 2, align: "items-start text-left" },
+    { branch: "defense", x: 98, y: 2, align: "items-end text-right" },
+    { branch: "greed", x: 2, y: 98, align: "items-start text-left" },
+    { branch: "tech", x: 98, y: 98, align: "items-end text-right" },
+  ];
+
+  return (
+    <div className={`relative rounded bg-background/40 ${expanded ? "h-full w-full" : "h-44"}`}>
+      <svg className="absolute inset-0 h-full w-full">
+        {TALENT_TREE.map((n) =>
+          (n.requires || []).map((r) => {
+            const p = TALENT_TREE.find((x) => x.id === r);
+            if (!p) return null;
+            return (
+              <line
+                key={`${n.id}-${r}`}
+                x1={`${p.x}%`}
+                y1={`${p.y}%`}
+                x2={`${n.x}%`}
+                y2={`${n.y}%`}
+                stroke="currentColor"
+                className={(talentRanks[r] || 0) > 0 ? "text-primary/70" : "text-border"}
+                strokeWidth={1.5}
+              />
+            );
+          })
+        )}
+      </svg>
+
+      {expanded && branchAnchors.map(({ branch, x, y, align }) => {
+        const meta = TALENT_BRANCHES[branch];
+        return (
+          <div
+            key={branch}
+            className={`absolute flex flex-col ${align} ${meta.color} pointer-events-none`}
+            style={{
+              left: `${x}%`,
+              top: `${y}%`,
+              transform: `translate(${x < 50 ? "0" : "-100%"}, ${y < 50 ? "0" : "-100%"})`,
+            }}
+          >
+            <div className="text-xs font-bold uppercase tracking-wider opacity-90">{meta.short} {meta.name}</div>
+          </div>
+        );
+      })}
+
+      {TALENT_TREE.map((n) => {
+        const rank = talentRanks[n.id] || 0;
+        const unlocked = !n.requires || n.requires.every((r) => (talentRanks[r] || 0) > 0);
+        const maxed = rank >= n.maxRank;
+        const meta = TALENT_BRANCHES[branchOf(n)];
+        const size = expanded ? "size-14" : "size-8";
+        return (
+          <div
+            key={n.id}
+            className="absolute -translate-x-1/2 -translate-y-1/2 flex flex-col items-center"
+            style={{ left: `${n.x}%`, top: `${n.y}%` }}
+          >
+            <button
+              onClick={() => spendTalent(n.id)}
+              title={`${n.name}\n${n.desc}\n${rank}/${n.maxRank}`}
+              className={`rounded-full border-2 text-[10px] font-bold transition ${
+                rank > 0
+                  ? "border-primary bg-primary text-primary-foreground"
+                  : unlocked
+                    ? `border-primary/50 bg-card hover:border-primary ${meta.color}`
+                    : "border-border bg-card/50 opacity-40 cursor-not-allowed"
+              } ${maxed ? "ring-2 ring-rarity-legendary" : ""} grid ${size} place-items-center`}
+              disabled={!unlocked || maxed || totalPoints <= 0}
+            >
+              {rank}/{n.maxRank}
+            </button>
+            {expanded && (
+              <div className="mt-1 w-32 text-center">
+                <div className={`text-[11px] font-bold leading-tight ${rank > 0 ? "text-foreground" : "text-foreground/80"}`}>
+                  {n.name}
+                </div>
+                <div className="text-[10px] leading-snug text-muted-foreground">{n.desc}</div>
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 export function SidePanel() {
   const {
     inventory,
