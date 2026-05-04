@@ -108,3 +108,18 @@
 
 @keyframes blink-caret { 0%,49% { opacity: 1 } 50%,100% { opacity: 0 } }
 .caret { animation: blink-caret 1s steps(1) infinite; }
+
+/* Idle CLI tab attention blink */
+@keyframes cli-idle-blink {
+  0%, 100% {
+    background-color: color-mix(in oklab, var(--destructive) 18%, transparent);
+    border-color: var(--destructive);
+    box-shadow: 0 0 0 0 color-mix(in oklab, var(--destructive) 60%, transparent);
+  }
+  50% {
+    background-color: color-mix(in oklab, var(--destructive) 35%, transparent);
+    border-color: var(--destructive);
+    box-shadow: 0 0 12px 2px color-mix(in oklab, var(--destructive) 60%, transparent);
+  }
+}
+.cli-idle-blink { animation: cli-idle-blink 1s ease-in-out infinite; }
