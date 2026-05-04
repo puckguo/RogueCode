@@ -31,7 +31,10 @@ export function CliTerminal() {
     let term: XTerminal | null = null;
 
     async function initTerminal() {
-      const { Terminal } = await import("@xterm/xterm/lib/xterm.js");
+      const mod: any = await import("@xterm/xterm");
+      const Terminal = mod.Terminal;
+      const container = containerRef.current;
+      if (!container) return () => {};
       term = new Terminal({
         fontFamily: "ui-monospace, SF Mono, Menlo, Consolas, monospace",
         fontSize: 12,
