@@ -720,8 +720,11 @@ export function ArenaStage() {
     Object.assign(stateRef.current, {
       enemies: [], bullets: [], pickups: [], fx: [], waveTime: 0, wave: 1,
       spawnCd: 0, pendingReward: false, runShards: 0, kills: 0,
+      volcanicCd: 3, quakeCd: 5, afflictedCd: 4, explosiveCd: 6,
+      sanguinePools: [], volcanoWarn: [],
     });
     p.x = ARENA_W / 2; p.y = ARENA_H / 2; p.hp = p.maxHp; p.chargeT = 0;
+    p.necroticStacks = 0; p.necroticTimer = 0;
     for (const sk of stateRef.current.skills) sk.cd = sk.max * 0.5;
     setRunUpgrades([]);
     setUpgradeChoices(null);
