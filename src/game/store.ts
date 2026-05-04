@@ -660,7 +660,8 @@ export const useGame = create<State>()((set, get) => {
     tick: () => {
       const s = get();
       if (!s.inRun) return;
-      if (s.cliStatus !== "STREAMING") return;
+      // Pause card-mode advancement if any started CLI is idle.
+      if (isAnyCliIdle({ sessions: s.sessions })) return;
       const newComboTimer = s.comboTimer + 1;
       let combo = s.combo;
       if (newComboTimer % 30 === 0) combo += 1;
