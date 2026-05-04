@@ -138,15 +138,38 @@ ipcMain.handle("pty:spawn", (_evt, opts) => {
       env: { ...process.env, PATH: fullPath, TERM: "xterm-256color", FORCE_COLOR: "1" },
     });
     sessions.set(id, proc);
-    sessionState.set(id, { status: "IDLE_WAITING", lastOutput: Date.now(), buffer: "" });
+    sessionState.set(id, {
+      status: "IDLE_WAITING", lastOutput: Date.now(), buffer: "",
+      lastUserWrite: 0, pendingEchoBytes: 0, aiBytesWindow: 0, windowStart: Date.now(),
+    });
     proc.onData((data) => {
       const st = sessionState.get(id);
       if (st) {
-        const wasIdle = st.status !== "STREAMING";
-        st.lastOutput = Date.now();
-        st.status = "STREAMING";
+        const now = Date.now();
+        const len = data.length;
+        // Discount bytes that look like terminal echo of recent user keystrokes.
+        let aiBytes = len;
+        if (st.pendingEchoBytes > 0 && now - st.lastUserWrite < ECHO_WINDOW_MS) {
+          const eaten = Math.min(st.pendingEchoBytes, len);
+          aiBytes -= eaten;
+          st.pendingEchoBytes -= eaten;
+        }
+        if (now - st.windowStart > 400) {
+          st.aiBytesWindow = 0;
+          st.windowStart = now;
+        }
+        st.aiBytesWindow += aiBytes;
         st.buffer = (st.buffer + data).slice(-2000);
-        if (wasIdle) broadcast("pty:status", { id, status: "STREAMING" });
+
+        // Flip to STREAMING only when the AI is producing meaningful output,
+        // not when the user is just typing into the terminal.
+        if (st.aiBytesWindow >= AI_ACTIVE_THRESHOLD) {
+          st.lastOutput = now;
+          if (st.status !== "STREAMING") {
+            st.status = "STREAMING";
+            broadcast("pty:status", { id, status: "STREAMING" });
+          }
+        }
       }
       broadcast("pty:data", { id, data });
     });
