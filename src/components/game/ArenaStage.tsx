@@ -194,6 +194,7 @@ export function ArenaStage() {
     player: {
       x: ARENA_W / 2, y: ARENA_H / 2, hp: 100, maxHp: 100, r: 14,
       speed: 180, atk: 8, crit: 5, fireCd: 0, chargeT: 0,
+      necroticStacks: 0, necroticTimer: 0,
     },
     enemies: [] as Enemy[],
     bullets: [] as Bullet[],
@@ -209,6 +210,13 @@ export function ArenaStage() {
     kills: 0,
     skills: [] as SkillState[],
     loadoutSig: "",
+    // Mythic affix timers
+    volcanicCd: 0,
+    quakeCd: 0,
+    afflictedCd: 0,
+    explosiveCd: 0,
+    sanguinePools: [] as Array<Vec & { life: number }>,
+    volcanoWarn: [] as Array<Vec & { warn: number; r: number }>,
   });
 
   const [, setTick] = useState(0);
