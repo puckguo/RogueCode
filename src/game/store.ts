@@ -221,9 +221,73 @@ export const useGame = create<State>()((set, get) => {
     totalPoints: save.totalPoints,
     stash: save.stash,
 
+    sessions: [{ id: "cli_1", label: "CLI 1", status: "IDLE_WAITING", hasStarted: false, lastActivityTs: 0 }],
+    activeSessionId: "cli_1",
+
+    mythicLevel: 1,
+    mythicAffixes: [],
+
     nextDropLegendary: false,
     recentEvents: [],
     runSummary: null,
+
+    addSession: (label) => {
+      const s = get();
+      const n = s.sessions.length + 1;
+      const id = `cli_${Date.now().toString(36)}`;
+      const sess: CliSession = { id, label: label || `CLI ${n}`, status: "IDLE_WAITING", hasStarted: false, lastActivityTs: 0 };
+      set({ sessions: [...s.sessions, sess], activeSessionId: id });
+      return id;
+    },
+    removeSession: (id) => {
+      const s = get();
+      const next = s.sessions.filter((x) => x.id !== id);
+      const active = s.activeSessionId === id ? next[0]?.id ?? null : s.activeSessionId;
+      set({ sessions: next.length ? next : [{ id: "cli_1", label: "CLI 1", status: "IDLE_WAITING", hasStarted: false, lastActivityTs: 0 }], activeSessionId: active ?? "cli_1" });
+    },
+    setActiveSession: (id) => {
+      const s = get();
+      const sess = s.sessions.find((x) => x.id === id);
+      if (!sess) return;
+      // Mirror its status to the legacy single cliStatus so existing UI keeps working.
+      set({ activeSessionId: id, cliStatus: sess.status });
+    },
+    renameSession: (id, label) => {
+      const s = get();
+      set({ sessions: s.sessions.map((x) => x.id === id ? { ...x, label } : x) });
+    },
+    updateSessionStatus: (id, status, hasStarted) => {
+      const s = get();
+      const sessions = s.sessions.map((x) =>
+        x.id === id
+          ? {
+              ...x,
+              status,
+              hasStarted: hasStarted ?? x.hasStarted,
+              lastActivityTs: status === "STREAMING" ? Date.now() : x.lastActivityTs,
+            }
+          : x,
+      );
+      const patch: Partial<State> = { sessions };
+      // Keep legacy active cliStatus mirrored
+      if (s.activeSessionId === id) patch.cliStatus = status;
+      set(patch as any);
+    },
+
+    setMythicLevel: (n: number) => {
+      const lvl = Math.max(1, Math.min(20, Math.floor(n)));
+      const aff = rollMythicAffixes(lvl);
+      set({ mythicLevel: lvl, mythicAffixes: aff });
+    },
+    rerollMythicAffixes: () => {
+      const s = get();
+      // 1 reroll costs 5 shards
+      if (s.shards < 5) return;
+      const aff = rollMythicAffixes(s.mythicLevel, Math.random() * 1e9);
+      const newShards = s.shards - 5;
+      set({ mythicAffixes: aff, shards: newShards });
+      persist({ shards: newShards, talentRanks: s.talentRanks, totalPoints: s.totalPoints, stash: s.stash });
+    },
 
     setCliStatus: (s: CliStatus) => {
       const prev = get().cliStatus;
