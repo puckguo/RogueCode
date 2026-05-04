@@ -196,10 +196,19 @@ ipcMain.handle("pty:write", (_evt, { id, data }) => {
   if (!proc) return { ok: false };
   const st = sessionState.get(id);
   if (st) {
-    st.lastUserWrite = Date.now();
-    // Most TTYs echo each typed char; CR (\r) is often echoed as \r\n. Reserve a small allowance.
+    const now = Date.now();
+    st.lastUserWrite = now;
     const extra = (String(data).match(/\r/g) || []).length;
     st.pendingEchoBytes = Math.min(2048, (st.pendingEchoBytes || 0) + String(data).length + extra);
+    // SIMPLE RULE: any user input immediately pauses the game/video.
+    // Flip to IDLE_WAITING right now and reset the AI activity window so
+    // echo/prompt-redraw cannot re-trigger STREAMING for a while.
+    st.aiBytesWindow = 0;
+    st.windowStart = now;
+    if (st.status !== "IDLE_WAITING") {
+      st.status = "IDLE_WAITING";
+      broadcast("pty:status", { id, status: "IDLE_WAITING" });
+    }
   }
   try { proc.write(data); return { ok: true }; }
   catch (e) { return { ok: false, error: String(e) }; }
