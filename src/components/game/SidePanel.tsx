@@ -74,7 +74,11 @@ export function SidePanel() {
     nextDropLegendary,
     runSummary,
     dismissRunSummary,
-  } = useGame();
+    mythicLevel,
+    mythicAffixes,
+    setMythicLevel,
+    rerollMythicAffixes,
+  } = useGame() as any;
 
   const slots: Item["slot"][] = ["weapon", "armor", "helm", "boots", "ring", "amulet"];
 
