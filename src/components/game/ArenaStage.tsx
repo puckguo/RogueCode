@@ -1,12 +1,18 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useGame } from "@/game/store";
 import { rollItem } from "@/game/arena";
+import type { FireMode, SkillKind, Item } from "@/game/types";
 
 type Vec = { x: number; y: number };
 type Entity = Vec & { id: number; hp: number; maxHp: number; r: number };
-type Bullet = Vec & { vx: number; vy: number; dmg: number; life: number; crit: boolean };
-type Enemy = Entity & { atk: number; speed: number; tier: "minion" | "elite" | "boss" };
+type Bullet = Vec & {
+  vx: number; vy: number; dmg: number; life: number; crit: boolean;
+  pierce: number; aoe?: number; color?: string; size?: number;
+};
+type Enemy = Entity & { atk: number; speed: number; tier: "minion" | "elite" | "boss"; slow: number };
 type Pickup = Vec & { id: number; kind: "shard" | "heal" };
+type Fx = Vec & { id: number; r: number; maxR: number; life: number; maxLife: number; color: string };
+type SkillState = { kind: SkillKind; cd: number; max: number; ready: number };
 
 const ARENA_W = 900;
 const ARENA_H = 540;
@@ -14,25 +20,58 @@ const ARENA_H = 540;
 let _id = 1;
 const nextId = () => _id++;
 
+type DerivedLoadout = {
+  fireMode: FireMode;
+  fireRate: number;
+  projSpeed: number;
+  range: number;
+  pierce: number;
+  skills: SkillState[];
+};
+
+function deriveLoadout(equipment: Record<string, Item | undefined>): DerivedLoadout {
+  let fireMode: FireMode = "normal";
+  let fireRate = 2.5;
+  let projSpeed = 480;
+  let range = 320;
+  let pierce = 0;
+  const skills: SkillState[] = [];
+  for (const it of Object.values(equipment)) {
+    if (!it) continue;
+    for (const a of it.affixes) {
+      if (a.fireMode) fireMode = a.fireMode;
+      if (a.fireRate) fireRate += a.fireRate;
+      if (a.projSpeed) projSpeed += a.projSpeed;
+      if (a.range) range += a.range;
+      if (a.pierce) pierce += a.pierce;
+      if (a.skill && a.skillCd) {
+        // dedupe by kind, keep lowest cd
+        const exist = skills.find((s) => s.kind === a.skill);
+        if (exist) exist.max = Math.min(exist.max, a.skillCd);
+        else skills.push({ kind: a.skill, cd: 0, max: a.skillCd, ready: 1 });
+      }
+    }
+  }
+  return { fireMode, fireRate, projSpeed, range, pierce, skills };
+}
+
+const SKILL_LABEL: Record<SkillKind, { name: string; icon: string }> = {
+  nova: { name: "Nova", icon: "✦" },
+  laser: { name: "Laser", icon: "═" },
+  missile: { name: "Missiles", icon: "➹" },
+  slow: { name: "Time Warp", icon: "⧖" },
+};
+
+const FIRE_LABEL: Record<FireMode, string> = {
+  normal: "Single",
+  shotgun: "Shotgun",
+  burst: "Burst",
+  charge: "Charge",
+  aoe: "AOE Mortar",
+};
+
 export function ArenaStage() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const stateRef = useRef({
-    player: { x: ARENA_W / 2, y: ARENA_H / 2, hp: 100, maxHp: 100, r: 14, speed: 180, atk: 8, crit: 5, fireCd: 0, fireRate: 2.5, range: 320, projSpeed: 480 },
-    enemies: [] as Enemy[],
-    bullets: [] as Bullet[],
-    pickups: [] as Pickup[],
-    keys: {} as Record<string, boolean>,
-    waveTime: 0,
-    waveDuration: 25,
-    wave: 1,
-    spawnCd: 0,
-    pendingReward: false,
-    runShards: 0,
-    kills: 0,
-  });
-
-  const [, setTick] = useState(0);
-  const force = () => setTick((t) => (t + 1) % 1000000);
 
   const {
     cliStatus,
@@ -46,13 +85,38 @@ export function ArenaStage() {
     addInventoryItem,
   } = useGame() as any;
 
-  // Apply talents/equipment buffs
+  const loadout = useMemo(() => deriveLoadout(equipment), [equipment]);
+
+  const stateRef = useRef({
+    player: {
+      x: ARENA_W / 2, y: ARENA_H / 2, hp: 100, maxHp: 100, r: 14,
+      speed: 180, atk: 8, crit: 5, fireCd: 0, chargeT: 0,
+    },
+    enemies: [] as Enemy[],
+    bullets: [] as Bullet[],
+    pickups: [] as Pickup[],
+    fx: [] as Fx[],
+    keys: {} as Record<string, boolean>,
+    waveTime: 0,
+    waveDuration: 25,
+    wave: 1,
+    spawnCd: 0,
+    pendingReward: false,
+    runShards: 0,
+    kills: 0,
+    skills: [] as SkillState[],
+    loadoutSig: "",
+  });
+
+  const [, setTick] = useState(0);
+  const force = () => setTick((t) => (t + 1) % 1000000);
+
+  // Sync derived stats from talents/equipment
   useEffect(() => {
     const s = stateRef.current.player;
     let atk = 8;
     let hp = 100;
     let crit = 5;
-    let fireRate = 2.5;
     for (const it of Object.values(equipment) as any[]) {
       if (!it) continue;
       for (const a of it.affixes) {
@@ -61,22 +125,30 @@ export function ArenaStage() {
         crit += a.crit || 0;
       }
     }
-    // talent ranks (reuse atk/hp/crit fields)
     Object.entries(talentRanks as Record<string, number>).forEach(([id, r]) => {
       if (id.startsWith("atk")) atk += r;
       if (id.startsWith("hp")) hp += r * 8;
       if (id.startsWith("crit")) crit += r * 2;
-      if (id === "energy" || id === "energy2") fireRate += r * 0.3;
     });
     s.atk = atk;
     s.maxHp = hp;
-    s.hp = Math.min(s.hp || hp, hp);
     if (!s.hp) s.hp = hp;
+    s.hp = Math.min(s.hp, hp);
     s.crit = crit;
-    s.fireRate = fireRate;
-  }, [equipment, talentRanks, inRun]);
 
-  // input
+    // sync skill list (preserve cooldown progress where possible)
+    const sig = loadout.skills.map((sk) => `${sk.kind}:${sk.max}`).join("|");
+    if (sig !== stateRef.current.loadoutSig) {
+      const prev = stateRef.current.skills;
+      stateRef.current.skills = loadout.skills.map((sk) => {
+        const old = prev.find((p) => p.kind === sk.kind);
+        return old ? { ...sk, cd: Math.min(old.cd, sk.max) } : { ...sk };
+      });
+      stateRef.current.loadoutSig = sig;
+    }
+  }, [equipment, talentRanks, loadout]);
+
+  // Input
   useEffect(() => {
     const down = (e: KeyboardEvent) => { stateRef.current.keys[e.key.toLowerCase()] = true; };
     const up = (e: KeyboardEvent) => { stateRef.current.keys[e.key.toLowerCase()] = false; };
@@ -88,7 +160,7 @@ export function ArenaStage() {
     };
   }, []);
 
-  // game loop
+  // Game loop
   useEffect(() => {
     let raf = 0;
     let last = performance.now();
@@ -106,6 +178,95 @@ export function ArenaStage() {
     return () => cancelAnimationFrame(raf);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [inRun, cliStatus]);
+
+  function fireWeapon(angOverride?: number) {
+    const st = stateRef.current;
+    const p = st.player;
+    const target = nearestEnemy(p, loadout.range);
+    const ang = angOverride ?? (target ? Math.atan2(target.y - p.y, target.x - p.x) : 0);
+    if (!target && angOverride === undefined) return false;
+    const isCrit = Math.random() * 100 < p.crit;
+    const baseDmg = Math.round(p.atk * (isCrit ? 2 : 1));
+    const mode = loadout.fireMode;
+
+    const mk = (a: number, dmgMul = 1, opts: Partial<Bullet> = {}) => {
+      st.bullets.push({
+        x: p.x, y: p.y,
+        vx: Math.cos(a) * loadout.projSpeed,
+        vy: Math.sin(a) * loadout.projSpeed,
+        dmg: Math.max(1, Math.round(baseDmg * dmgMul)),
+        life: loadout.range / loadout.projSpeed,
+        crit: isCrit,
+        pierce: loadout.pierce,
+        ...opts,
+      });
+    };
+
+    if (mode === "shotgun") {
+      const n = 5;
+      const spread = 0.5;
+      for (let i = 0; i < n; i++) {
+        const a = ang + ((i - (n - 1) / 2) / (n - 1)) * spread;
+        mk(a, 0.55);
+      }
+    } else if (mode === "burst") {
+      // 3-round burst with small delay
+      mk(ang, 0.7);
+      setTimeout(() => { if (stateRef.current.player.hp > 0) mk(ang, 0.7); }, 80);
+      setTimeout(() => { if (stateRef.current.player.hp > 0) mk(ang, 0.7); }, 160);
+    } else if (mode === "charge") {
+      // Handled by chargeT in step; this branch only fires on release
+      mk(ang, 1, { size: 8, color: "#a855f7", pierce: loadout.pierce + 2 });
+    } else if (mode === "aoe") {
+      mk(ang, 1.1, { aoe: 70, color: "#fb923c", size: 6 });
+    } else {
+      mk(ang, 1);
+    }
+    return true;
+  }
+
+  function castSkill(sk: SkillState) {
+    const st = stateRef.current;
+    const p = st.player;
+    const dmg = Math.round(p.atk * 1.5);
+    if (sk.kind === "nova") {
+      st.fx.push({ id: nextId(), x: p.x, y: p.y, r: 0, maxR: 180, life: 0.35, maxLife: 0.35, color: "#22d3ee" });
+      for (const e of st.enemies) {
+        if (Math.hypot(e.x - p.x, e.y - p.y) < 180) e.hp -= dmg * 1.2;
+      }
+    } else if (sk.kind === "laser") {
+      const target = nearestEnemy(p, 9999);
+      const ang = target ? Math.atan2(target.y - p.y, target.x - p.x) : 0;
+      const len = 600;
+      const ex = p.x + Math.cos(ang) * len;
+      const ey = p.y + Math.sin(ang) * len;
+      st.fx.push({ id: nextId(), x: (p.x + ex) / 2, y: (p.y + ey) / 2, r: ang, maxR: len, life: 0.25, maxLife: 0.25, color: "#f43f5e" });
+      // damage enemies along line
+      for (const e of st.enemies) {
+        const dx = e.x - p.x, dy = e.y - p.y;
+        const t = (dx * Math.cos(ang) + dy * Math.sin(ang));
+        if (t < 0 || t > len) continue;
+        const px = p.x + Math.cos(ang) * t;
+        const py = p.y + Math.sin(ang) * t;
+        if (Math.hypot(e.x - px, e.y - py) < e.r + 10) e.hp -= dmg * 1.5;
+      }
+    } else if (sk.kind === "missile") {
+      // launch 4 homing as fast bullets toward random enemies
+      const targets = [...st.enemies].sort(() => Math.random() - 0.5).slice(0, 4);
+      for (const t of targets) {
+        const ang = Math.atan2(t.y - p.y, t.x - p.x);
+        st.bullets.push({
+          x: p.x, y: p.y,
+          vx: Math.cos(ang) * 600, vy: Math.sin(ang) * 600,
+          dmg, life: 1.2, crit: false, pierce: 0, aoe: 40, color: "#facc15", size: 5,
+        });
+      }
+    } else if (sk.kind === "slow") {
+      for (const e of st.enemies) e.slow = Math.max(e.slow, 3);
+      st.fx.push({ id: nextId(), x: p.x, y: p.y, r: 0, maxR: 260, life: 0.5, maxLife: 0.5, color: "#94a3b8" });
+    }
+    sk.cd = sk.max;
+  }
 
   function step(dt: number) {
     const st = stateRef.current;
@@ -129,23 +290,24 @@ export function ArenaStage() {
       spawnEnemy(st.wave);
     }
 
-    // auto shoot
-    p.fireCd -= dt;
-    if (p.fireCd <= 0) {
-      const target = nearestEnemy(p, p.range);
-      if (target) {
-        p.fireCd = 1 / p.fireRate;
-        const ang = Math.atan2(target.y - p.y, target.x - p.x);
-        const isCrit = Math.random() * 100 < p.crit;
-        st.bullets.push({
-          x: p.x, y: p.y,
-          vx: Math.cos(ang) * p.projSpeed,
-          vy: Math.sin(ang) * p.projSpeed,
-          dmg: Math.round(p.atk * (isCrit ? 2 : 1)),
-          life: 1.2,
-          crit: isCrit,
-        });
+    // weapon fire
+    if (loadout.fireMode === "charge") {
+      // charge up over 1s, fire when full and target exists
+      p.chargeT = Math.min(1, p.chargeT + dt * 1.2);
+      if (p.chargeT >= 1) {
+        if (fireWeapon()) p.chargeT = 0;
       }
+    } else {
+      p.fireCd -= dt;
+      if (p.fireCd <= 0) {
+        if (fireWeapon()) p.fireCd = 1 / loadout.fireRate;
+      }
+    }
+
+    // skills auto-cast
+    for (const sk of st.skills) {
+      sk.cd = Math.max(0, sk.cd - dt);
+      if (sk.cd <= 0 && st.enemies.length > 0) castSkill(sk);
     }
 
     // bullets
@@ -154,28 +316,39 @@ export function ArenaStage() {
       b.y += b.vy * dt;
       b.life -= dt;
     }
-    st.bullets = st.bullets.filter((b) => b.life > 0 && b.x > 0 && b.x < ARENA_W && b.y > 0 && b.y < ARENA_H);
-
-    // enemies move toward player
-    for (const e of st.enemies) {
-      const ang = Math.atan2(p.y - e.y, p.x - e.x);
-      e.x += Math.cos(ang) * e.speed * dt;
-      e.y += Math.sin(ang) * e.speed * dt;
-      // collision with player
-      if (Math.hypot(e.x - p.x, e.y - p.y) < e.r + p.r) {
-        p.hp -= e.atk * dt * 2;
-      }
-    }
-
     // bullet vs enemy
     for (const b of st.bullets) {
+      if (b.life <= 0) continue;
       for (const e of st.enemies) {
         if (e.hp <= 0) continue;
-        if (Math.hypot(e.x - b.x, e.y - b.y) < e.r + 4) {
+        const hitR = e.r + (b.size ?? 4);
+        if (Math.hypot(e.x - b.x, e.y - b.y) < hitR) {
           e.hp -= b.dmg;
-          b.life = 0;
-          break;
+          if (b.aoe) {
+            st.fx.push({ id: nextId(), x: b.x, y: b.y, r: 0, maxR: b.aoe, life: 0.3, maxLife: 0.3, color: b.color || "#fb923c" });
+            for (const e2 of st.enemies) {
+              if (e2 === e || e2.hp <= 0) continue;
+              if (Math.hypot(e2.x - b.x, e2.y - b.y) < b.aoe) e2.hp -= b.dmg * 0.6;
+            }
+            b.life = 0;
+            break;
+          }
+          if (b.pierce > 0) { b.pierce--; }
+          else { b.life = 0; break; }
         }
+      }
+    }
+    st.bullets = st.bullets.filter((b) => b.life > 0 && b.x > -20 && b.x < ARENA_W + 20 && b.y > -20 && b.y < ARENA_H + 20);
+
+    // enemies
+    for (const e of st.enemies) {
+      const slowMul = e.slow > 0 ? 0.4 : 1;
+      e.slow = Math.max(0, e.slow - dt);
+      const ang = Math.atan2(p.y - e.y, p.x - e.x);
+      e.x += Math.cos(ang) * e.speed * slowMul * dt;
+      e.y += Math.sin(ang) * e.speed * slowMul * dt;
+      if (Math.hypot(e.x - p.x, e.y - p.y) < e.r + p.r) {
+        p.hp -= e.atk * dt * 2;
       }
     }
 
@@ -187,6 +360,14 @@ export function ArenaStage() {
       }
     }
     st.enemies = st.enemies.filter((e) => e.hp > 0);
+
+    // fx tick
+    for (const f of st.fx) {
+      f.life -= dt;
+      if (f.color === "#f43f5e") { /* laser keeps r as angle */ }
+      else f.r = f.maxR * (1 - f.life / f.maxLife);
+    }
+    st.fx = st.fx.filter((f) => f.life > 0);
 
     // pickup magnet + pick
     for (const pk of st.pickups) {
@@ -213,14 +394,12 @@ export function ArenaStage() {
       st.waveTime = 0;
       st.wave += 1;
       st.pendingReward = true;
-      // drop item
       const isBoss = (st.wave - 1) % 5 === 0;
       const force = nextDropLegendary ? "legendary" : isBoss ? "rare" : undefined;
       const it = rollItem(st.wave, 0, force);
       addInventoryItem?.(it, !!nextDropLegendary);
     }
 
-    // death
     if (p.hp <= 0) {
       endRun();
       resetArena();
@@ -235,7 +414,6 @@ export function ArenaStage() {
     const hp = tier === "boss" ? 200 + wave * 40 : tier === "elite" ? 40 + wave * 8 : 12 + wave * 3;
     const atk = tier === "boss" ? 25 + wave : tier === "elite" ? 12 + wave / 2 : 6 + wave / 3;
     const speed = tier === "boss" ? 55 : tier === "elite" ? 75 : 95;
-    // spawn from edge
     const side = Math.floor(Math.random() * 4);
     const r = tier === "boss" ? 26 : tier === "elite" ? 18 : 12;
     const pos =
@@ -243,7 +421,7 @@ export function ArenaStage() {
       side === 1 ? { x: ARENA_W + r, y: Math.random() * ARENA_H } :
       side === 2 ? { x: Math.random() * ARENA_W, y: ARENA_H + r } :
       { x: -r, y: Math.random() * ARENA_H };
-    st.enemies.push({ id: nextId(), x: pos.x, y: pos.y, hp, maxHp: hp, atk, speed, r, tier });
+    st.enemies.push({ id: nextId(), x: pos.x, y: pos.y, hp, maxHp: hp, atk, speed, r, tier, slow: 0 });
   }
 
   function nearestEnemy(p: Vec, range: number) {
@@ -260,9 +438,11 @@ export function ArenaStage() {
   function resetArena() {
     const p = stateRef.current.player;
     Object.assign(stateRef.current, {
-      enemies: [], bullets: [], pickups: [], waveTime: 0, wave: 1, spawnCd: 0, pendingReward: false, runShards: 0, kills: 0,
+      enemies: [], bullets: [], pickups: [], fx: [], waveTime: 0, wave: 1,
+      spawnCd: 0, pendingReward: false, runShards: 0, kills: 0,
     });
-    p.x = ARENA_W / 2; p.y = ARENA_H / 2; p.hp = p.maxHp;
+    p.x = ARENA_W / 2; p.y = ARENA_H / 2; p.hp = p.maxHp; p.chargeT = 0;
+    for (const sk of stateRef.current.skills) sk.cd = sk.max * 0.5;
   }
 
   function nextWave() {
@@ -274,10 +454,8 @@ export function ArenaStage() {
     if (!cv) return;
     const ctx = cv.getContext("2d")!;
     const st = stateRef.current;
-    // background
     ctx.fillStyle = "#0e1018";
     ctx.fillRect(0, 0, ARENA_W, ARENA_H);
-    // grid
     ctx.strokeStyle = "rgba(255,255,255,0.04)";
     for (let x = 0; x < ARENA_W; x += 40) {
       ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, ARENA_H); ctx.stroke();
@@ -286,31 +464,60 @@ export function ArenaStage() {
       ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(ARENA_W, y); ctx.stroke();
     }
 
-    // pickups
+    // fx (under entities)
+    for (const f of st.fx) {
+      const alpha = f.life / f.maxLife;
+      if (f.color === "#f43f5e") {
+        // laser line: r holds angle, maxR length, x/y midpoint
+        const ang = f.r;
+        const len = f.maxR;
+        const sx = f.x - Math.cos(ang) * len / 2;
+        const sy = f.y - Math.sin(ang) * len / 2;
+        const ex = f.x + Math.cos(ang) * len / 2;
+        const ey = f.y + Math.sin(ang) * len / 2;
+        ctx.strokeStyle = `rgba(244,63,94,${alpha})`;
+        ctx.lineWidth = 8 * alpha + 2;
+        ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(ex, ey); ctx.stroke();
+        ctx.lineWidth = 1;
+      } else {
+        ctx.strokeStyle = f.color;
+        ctx.globalAlpha = alpha;
+        ctx.beginPath(); ctx.arc(f.x, f.y, f.r, 0, Math.PI * 2); ctx.stroke();
+        ctx.globalAlpha = 1;
+      }
+    }
+
     for (const pk of st.pickups) {
       ctx.fillStyle = pk.kind === "shard" ? "#7dd3fc" : "#f87171";
       ctx.beginPath(); ctx.arc(pk.x, pk.y, 4, 0, Math.PI * 2); ctx.fill();
     }
-    // enemies
     for (const e of st.enemies) {
       ctx.fillStyle = e.tier === "boss" ? "#f59e0b" : e.tier === "elite" ? "#a78bfa" : "#ef4444";
       ctx.beginPath(); ctx.arc(e.x, e.y, e.r, 0, Math.PI * 2); ctx.fill();
-      // hp bar
+      if (e.slow > 0) {
+        ctx.strokeStyle = "rgba(148,163,184,0.7)";
+        ctx.beginPath(); ctx.arc(e.x, e.y, e.r + 3, 0, Math.PI * 2); ctx.stroke();
+      }
       const w = e.r * 2;
       ctx.fillStyle = "#222"; ctx.fillRect(e.x - w / 2, e.y - e.r - 8, w, 3);
       ctx.fillStyle = "#22c55e"; ctx.fillRect(e.x - w / 2, e.y - e.r - 8, w * (e.hp / e.maxHp), 3);
     }
-    // bullets
     for (const b of st.bullets) {
-      ctx.fillStyle = b.crit ? "#fde047" : "#fbbf24";
-      ctx.beginPath(); ctx.arc(b.x, b.y, b.crit ? 5 : 3, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = b.color || (b.crit ? "#fde047" : "#fbbf24");
+      ctx.beginPath(); ctx.arc(b.x, b.y, b.size ?? (b.crit ? 5 : 3), 0, Math.PI * 2); ctx.fill();
     }
-    // player
     const p = st.player;
+    // charge ring
+    if (loadout.fireMode === "charge" && p.chargeT > 0) {
+      ctx.strokeStyle = `rgba(168,85,247,${0.3 + p.chargeT * 0.7})`;
+      ctx.lineWidth = 2 + p.chargeT * 3;
+      ctx.beginPath(); ctx.arc(p.x, p.y, p.r + 6, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * p.chargeT); ctx.stroke();
+      ctx.lineWidth = 1;
+    }
     ctx.fillStyle = "#60a5fa";
     ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2); ctx.fill();
     ctx.strokeStyle = "rgba(96,165,250,0.25)";
-    ctx.beginPath(); ctx.arc(p.x, p.y, p.range, 0, Math.PI * 2); ctx.stroke();
+    ctx.beginPath(); ctx.arc(p.x, p.y, loadout.range, 0, Math.PI * 2); ctx.stroke();
   }
 
   const st = stateRef.current;
@@ -377,8 +584,9 @@ export function ArenaStage() {
         )}
       </div>
 
-      <div className="border-t bg-background/40 px-4 py-2 text-xs">
-        <div className="flex items-center gap-4">
+      {/* Bottom HUD: stats + skills */}
+      <div className="border-t bg-background/40 px-4 py-2 text-xs space-y-2">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
           <div className="flex w-64 items-center gap-2">
             <span className="text-hp">❤</span>
             <div className="h-3 flex-1 overflow-hidden rounded-full bg-muted">
@@ -388,8 +596,36 @@ export function ArenaStage() {
           </div>
           <div>ATK {st.player.atk}</div>
           <div>CRIT {st.player.crit}%</div>
-          <div>RoF {st.player.fireRate.toFixed(1)}/s</div>
-          <div>Range {st.player.range}</div>
+          <div>RoF {loadout.fireRate.toFixed(1)}/s</div>
+          <div>Range {loadout.range}</div>
+          {loadout.pierce > 0 && <div>Pierce +{loadout.pierce}</div>}
+          <div className="rounded border border-primary/40 bg-primary/10 px-2 py-0.5 text-primary">
+            ◎ {FIRE_LABEL[loadout.fireMode]}
+          </div>
+        </div>
+
+        {/* Skills */}
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-muted-foreground">Skills:</span>
+          {st.skills.length === 0 && <span className="text-muted-foreground/60">none — equip skill affixes to unlock</span>}
+          {st.skills.map((sk) => {
+            const ratio = 1 - sk.cd / sk.max;
+            const ready = sk.cd <= 0;
+            return (
+              <div
+                key={sk.kind}
+                className={`relative flex items-center gap-1.5 rounded border px-2 py-1 ${ready ? "border-accent bg-accent/15 text-accent" : "border-muted bg-muted/20 text-muted-foreground"}`}
+                title={`${SKILL_LABEL[sk.kind].name} · CD ${sk.max}s`}
+              >
+                <span className="text-base leading-none">{SKILL_LABEL[sk.kind].icon}</span>
+                <span className="font-medium">{SKILL_LABEL[sk.kind].name}</span>
+                <div className="relative h-1.5 w-12 overflow-hidden rounded-full bg-background/60">
+                  <div className="h-full bg-accent transition-[width]" style={{ width: `${ratio * 100}%` }} />
+                </div>
+                <span className="font-mono text-[10px]">{ready ? "READY" : sk.cd.toFixed(1) + "s"}</span>
+              </div>
+            );
+          })}
         </div>
       </div>
     </div>
