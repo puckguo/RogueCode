@@ -169,7 +169,17 @@ export function ArenaStage() {
     equipment,
     setShardsAdd,
     addInventoryItem,
+    sessions,
+    mythicLevel,
+    mythicAffixes,
   } = useGame() as any;
+
+  const anyIdle = isAnyCliIdle({ sessions });
+  const mScale = useMemo(() => mythicScale(mythicLevel), [mythicLevel]);
+  const mythicIds = useMemo(
+    () => new Set((mythicAffixes as MythicAffix[]).map((a) => a.id)),
+    [mythicAffixes],
+  );
 
   // In-run upgrades chosen between waves (Brotato style).
   const [runUpgrades, setRunUpgrades] = useState<ArenaUpgrade[]>([]);
