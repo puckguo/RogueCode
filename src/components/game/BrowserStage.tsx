@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useGame, isAnyCliIdle } from "@/game/store";
 import { isElectron } from "@/lib/electron";
 
@@ -42,7 +42,7 @@ export function BrowserStage() {
   const [input, setInput] = useState(url);
   const [loading, setLoading] = useState(false);
   const webviewRef = useRef<HTMLElement | null>(null);
-  const electron = isElectron();
+  const electron = isElectron;
 
   // Apply pause/resume to webview when idle state changes.
   useEffect(() => {
@@ -152,15 +152,13 @@ export function BrowserStage() {
       {/* Viewport */}
       <div className="relative min-h-0 flex-1 bg-black">
         {electron ? (
-          // @ts-expect-error webview is an Electron-only element
-          <webview
-            ref={(el: any) => { webviewRef.current = el; }}
-            src={url}
-            allowpopups="true"
-            // eslint-disable-next-line react/no-unknown-property
-            partition="persist:cqbrowser"
-            style={{ width: "100%", height: "100%", display: "inline-flex" }}
-          />
+          React.createElement("webview", {
+            ref: (el: any) => { webviewRef.current = el; },
+            src: url,
+            allowpopups: "true",
+            partition: "persist:cqbrowser",
+            style: { width: "100%", height: "100%", display: "inline-flex" },
+          })
         ) : (
           <iframe
             key={url}
