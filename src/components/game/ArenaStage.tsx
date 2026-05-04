@@ -10,7 +10,7 @@ type Bullet = Vec & {
   vx: number; vy: number; dmg: number; life: number; crit: boolean;
   pierce: number; aoe?: number; color?: string; size?: number;
 };
-type Enemy = Entity & { atk: number; speed: number; tier: "minion" | "elite" | "boss"; slow: number };
+type Enemy = Entity & { atk: number; speed: number; tier: "minion" | "elite" | "boss"; slow: number; special?: "explosive" | "spite"; fuse?: number; bolster?: number };
 type Pickup = Vec & { id: number; kind: "shard" | "heal" };
 type Fx = Vec & { id: number; r: number; maxR: number; life: number; maxLife: number; color: string };
 type SkillState = { kind: SkillKind; cd: number; max: number; ready: number };
