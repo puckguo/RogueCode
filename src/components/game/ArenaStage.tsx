@@ -622,8 +622,9 @@ export function ArenaStage() {
       }
       if (dist < p.r + 6) {
         if (pk.kind === "shard") {
-          st.runShards += 1;
-          setShardsAdd?.(1);
+          const reward = Math.max(1, Math.round(mScale.rewardMul));
+          st.runShards += reward;
+          setShardsAdd?.(reward);
         } else {
           p.hp = Math.min(p.maxHp, p.hp + 15);
         }
