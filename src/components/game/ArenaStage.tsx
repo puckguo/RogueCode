@@ -860,6 +860,9 @@ export function ArenaStage() {
           <div>{Math.max(0, Math.ceil(st.waveDuration - st.waveTime))}s</div>
           <div>Kills {st.kills}</div>
           <div>+⟡ {st.runShards}</div>
+          <div className="rounded border border-rarity-legendary/60 bg-rarity-legendary/10 px-2 py-0.5 text-rarity-legendary">
+            ⚷ Mythic +{mythicLevel}
+          </div>
         </div>
         <div className="flex gap-2">
           {!inRun ? (
@@ -869,6 +872,25 @@ export function ArenaStage() {
           )}
         </div>
       </div>
+
+      {/* Mythic affix bar */}
+      {(mythicAffixes as MythicAffix[]).length > 0 && (
+        <div className="flex flex-wrap items-center gap-1 border-b bg-destructive/5 px-3 py-1.5 text-[10px]">
+          <span className="text-muted-foreground uppercase tracking-wider">Affixes:</span>
+          {(mythicAffixes as MythicAffix[]).map((a) => (
+            <span
+              key={a.id}
+              title={a.desc}
+              className="rounded border border-destructive/40 bg-destructive/10 px-1.5 py-0.5 text-destructive"
+            >
+              {a.name}
+            </span>
+          ))}
+          <span className="ml-auto text-muted-foreground">
+            HP×{mScale.hpMul.toFixed(2)} · DMG×{mScale.atkMul.toFixed(2)} · Loot×{mScale.rewardMul.toFixed(2)}
+          </span>
+        </div>
+      )}
 
       <div className="relative flex flex-1 items-center justify-center bg-background/30 p-2">
         <canvas
