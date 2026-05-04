@@ -188,6 +188,13 @@ ipcMain.handle("pty:spawn", (_evt, opts) => {
 ipcMain.handle("pty:write", (_evt, { id, data }) => {
   const proc = sessions.get(id);
   if (!proc) return { ok: false };
+  const st = sessionState.get(id);
+  if (st) {
+    st.lastUserWrite = Date.now();
+    // Most TTYs echo each typed char; CR (\r) is often echoed as \r\n. Reserve a small allowance.
+    const extra = (String(data).match(/\r/g) || []).length;
+    st.pendingEchoBytes = Math.min(2048, (st.pendingEchoBytes || 0) + String(data).length + extra);
+  }
   try { proc.write(data); return { ok: true }; }
   catch (e) { return { ok: false, error: String(e) }; }
 });
