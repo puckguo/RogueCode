@@ -212,11 +212,14 @@ ipcMain.handle("pty:write", (_evt, { id, data }) => {
     const s = String(data);
     // Detect mouse-event escape sequences emitted by xterm when the terminal
     // app has mouse tracking enabled (e.g. SGR: ESC[<...M/m, X10: ESC[M...).
-    // Mouse clicks/scrolls/movement must NOT count as keyboard input and
-    // must NOT pause the game.
+    // Also detect focus sequences (CSI I/O) which report focus gained/lost.
+    // Mouse clicks/scrolls/movement and focus events must NOT count as keyboard
+    // input and must NOT pause the game.
     const isMouseOnly =
       /^(\x1b\[<\d+;\d+;\d+[Mm])+$/.test(s) ||
-      /^(\x1b\[M...)+$/.test(s);
+      /^(\x1b\[M...)+$/.test(s) ||
+      /^\x1b\[O$/.test(s) ||         // Focus Out (ESC[O)
+      /^\x1b\[I$/.test(s);           // Focus In (ESC[I)
     if (isMouseOnly) {
       // Still forward to the PTY but skip all "user typed" bookkeeping.
       try { proc.write(data); return { ok: true }; }
