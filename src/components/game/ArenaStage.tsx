@@ -141,6 +141,21 @@ const FIRE_LABEL: Record<FireMode, string> = {
   aoe: "AOE Mortar",
 };
 
+const rarityText: Record<Rarity, string> = {
+  common: "text-rarity-common",
+  magic: "text-rarity-magic",
+  rare: "text-rarity-rare",
+  set: "text-rarity-set",
+  legendary: "text-rarity-legendary",
+};
+const rarityBorder: Record<Rarity, string> = {
+  common: "border-rarity-common/40",
+  magic: "border-rarity-magic/50",
+  rare: "border-rarity-rare/60",
+  set: "border-rarity-set/60",
+  legendary: "border-rarity-legendary/70",
+};
+
 export function ArenaStage() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
