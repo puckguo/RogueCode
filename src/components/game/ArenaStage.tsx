@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useGame } from "@/game/store";
 import { rollItem } from "@/game/arena";
-import type { FireMode, SkillKind, Item } from "@/game/types";
+import { rollArenaUpgrades } from "@/game/data";
+import type { ArenaUpgrade, FireMode, Item, Rarity, SkillKind } from "@/game/types";
 
 type Vec = { x: number; y: number };
 type Entity = Vec & { id: number; hp: number; maxHp: number; r: number };
