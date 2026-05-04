@@ -231,7 +231,7 @@ export const useGame = create<State>()((set, get) => {
     recentEvents: [],
     runSummary: null,
 
-    addSession: (label) => {
+    addSession: (label?: string) => {
       const s = get();
       const n = s.sessions.length + 1;
       const id = `cli_${Date.now().toString(36)}`;
@@ -239,24 +239,23 @@ export const useGame = create<State>()((set, get) => {
       set({ sessions: [...s.sessions, sess], activeSessionId: id });
       return id;
     },
-    removeSession: (id) => {
+    removeSession: (id: string) => {
       const s = get();
       const next = s.sessions.filter((x) => x.id !== id);
       const active = s.activeSessionId === id ? next[0]?.id ?? null : s.activeSessionId;
       set({ sessions: next.length ? next : [{ id: "cli_1", label: "CLI 1", status: "IDLE_WAITING", hasStarted: false, lastActivityTs: 0 }], activeSessionId: active ?? "cli_1" });
     },
-    setActiveSession: (id) => {
+    setActiveSession: (id: string) => {
       const s = get();
       const sess = s.sessions.find((x) => x.id === id);
       if (!sess) return;
-      // Mirror its status to the legacy single cliStatus so existing UI keeps working.
       set({ activeSessionId: id, cliStatus: sess.status });
     },
-    renameSession: (id, label) => {
+    renameSession: (id: string, label: string) => {
       const s = get();
       set({ sessions: s.sessions.map((x) => x.id === id ? { ...x, label } : x) });
     },
-    updateSessionStatus: (id, status, hasStarted) => {
+    updateSessionStatus: (id: string, status: CliStatus, hasStarted?: boolean) => {
       const s = get();
       const sessions = s.sessions.map((x) =>
         x.id === id
@@ -269,7 +268,6 @@ export const useGame = create<State>()((set, get) => {
           : x,
       );
       const patch: Partial<State> = { sessions };
-      // Keep legacy active cliStatus mirrored
       if (s.activeSessionId === id) patch.cliStatus = status;
       set(patch as any);
     },
