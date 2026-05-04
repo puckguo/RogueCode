@@ -849,7 +849,8 @@ export function ArenaStage() {
   }
 
   const st = stateRef.current;
-  const paused = !inRun || cliStatus !== "STREAMING";
+  const paused = !inRun || anyIdle;
+  const idleCount = (sessions as any[]).filter((x) => x.hasStarted && x.status !== "STREAMING").length;
 
   return (
     <div className="relative flex h-full flex-col rounded-lg border bg-card overflow-hidden">
