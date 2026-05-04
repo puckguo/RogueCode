@@ -156,7 +156,14 @@ export function ArenaStage() {
     addInventoryItem,
   } = useGame() as any;
 
-  const loadout = useMemo(() => deriveLoadout(equipment), [equipment]);
+  // In-run upgrades chosen between waves (Brotato style).
+  const [runUpgrades, setRunUpgrades] = useState<ArenaUpgrade[]>([]);
+  const [upgradeChoices, setUpgradeChoices] = useState<ArenaUpgrade[] | null>(null);
+
+  const loadout = useMemo(
+    () => deriveLoadout(equipment, talentRanks, runUpgrades),
+    [equipment, talentRanks, runUpgrades],
+  );
 
   const stateRef = useRef({
     player: {
@@ -182,7 +189,7 @@ export function ArenaStage() {
   const [, setTick] = useState(0);
   const force = () => setTick((t) => (t + 1) % 1000000);
 
-  // Sync derived stats from talents/equipment
+  // Sync derived stats from talents + equipment + in-run upgrades
   useEffect(() => {
     const s = stateRef.current.player;
     let atk = 8;
@@ -196,18 +203,27 @@ export function ArenaStage() {
         crit += a.crit || 0;
       }
     }
-    Object.entries(talentRanks as Record<string, number>).forEach(([id, r]) => {
-      if (id.startsWith("atk")) atk += r;
-      if (id.startsWith("hp")) hp += r * 8;
-      if (id.startsWith("crit")) crit += r * 2;
-    });
-    s.atk = atk;
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { TALENT_TREE } = require("@/game/data") as typeof import("@/game/data");
+    for (const node of TALENT_TREE) {
+      const r = (talentRanks as Record<string, number>)[node.id] || 0;
+      if (!r) continue;
+      atk += (node.effect.atk || 0) * r;
+      hp += (node.effect.hp || 0) * r;
+      crit += (node.effect.crit || 0) * r;
+    }
+    for (const u of runUpgrades) {
+      atk += u.atk || 0;
+      hp += u.hp || 0;
+      crit += u.crit || 0;
+    }
+    s.atk = Math.round(atk * loadout.dmgMul);
     s.maxHp = hp;
     if (!s.hp) s.hp = hp;
     s.hp = Math.min(s.hp, hp);
     s.crit = crit;
+    s.speed = 180 + loadout.speedBonus;
 
-    // sync skill list (preserve cooldown progress where possible)
     const sig = loadout.skills.map((sk) => `${sk.kind}:${sk.max}`).join("|");
     if (sig !== stateRef.current.loadoutSig) {
       const prev = stateRef.current.skills;
@@ -217,7 +233,7 @@ export function ArenaStage() {
       });
       stateRef.current.loadoutSig = sig;
     }
-  }, [equipment, talentRanks, loadout]);
+  }, [equipment, talentRanks, loadout, runUpgrades]);
 
   // Input
   useEffect(() => {
