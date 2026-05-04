@@ -542,10 +542,25 @@ export function ArenaStage() {
     });
     p.x = ARENA_W / 2; p.y = ARENA_H / 2; p.hp = p.maxHp; p.chargeT = 0;
     for (const sk of stateRef.current.skills) sk.cd = sk.max * 0.5;
+    setRunUpgrades([]);
+    setUpgradeChoices(null);
   }
 
   function nextWave() {
     stateRef.current.pendingReward = false;
+  }
+
+  function pickUpgrade(u: ArenaUpgrade) {
+    setRunUpgrades((prev) => [...prev, u]);
+    setUpgradeChoices(null);
+    // small heal on pick (Brotato-style breather)
+    const p = stateRef.current.player;
+    p.hp = Math.min(p.maxHp, p.hp + 10);
+    stateRef.current.pendingReward = false;
+  }
+
+  function rerollChoices() {
+    setUpgradeChoices(rollArenaUpgrades(stateRef.current.wave * 2));
   }
 
   function draw() {
