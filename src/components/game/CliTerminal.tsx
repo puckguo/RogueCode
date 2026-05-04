@@ -35,7 +35,7 @@ export function CliTerminal() {
       const Terminal = mod.Terminal;
       const container = containerRef.current;
       if (!container) return () => {};
-      term = new Terminal({
+      const t: any = new Terminal({
         fontFamily: "ui-monospace, SF Mono, Menlo, Consolas, monospace",
         fontSize: 12,
         theme: {
@@ -47,32 +47,33 @@ export function CliTerminal() {
         convertEol: true,
         scrollback: 4000,
       });
+      term = t;
       const fit = new FitAddon();
-      term.loadAddon(fit);
-      term.open(containerRef.current);
+      t.loadAddon(fit);
+      t.open(container);
       try { fit.fit(); } catch {}
-      termRef.current = term;
+      termRef.current = t;
       fitRef.current = fit;
 
-      term.onData((data) => {
+      t.onData((data: string) => {
         if (sessionId.current && cq) cq.write(sessionId.current, data);
       });
 
       const ro = new ResizeObserver(() => {
         try {
           fit.fit();
-          if (sessionId.current && cq) cq.resize(sessionId.current, term!.cols, term!.rows);
+          if (sessionId.current && cq) cq.resize(sessionId.current, t.cols, t.rows);
         } catch {}
       });
-      ro.observe(containerRef.current);
+      ro.observe(container);
 
       if (!isElectron) {
-        term.writeln("\x1b[33m⚠  Browser preview mode\x1b[0m");
-        term.writeln("This panel is a real PTY when launched as a desktop app.");
-        term.writeln("Run:  \x1b[36mnpm run electron:dev\x1b[0m  to attach to claude / aider / your shell.");
-        term.writeln("");
-        term.writeln("Browser sandbox cannot spawn local processes — the simulated game loop is disabled");
-        term.writeln("to honor your 'no mock' request. Open in Electron to play.");
+        t.writeln("\x1b[33m⚠  Browser preview mode\x1b[0m");
+        t.writeln("This panel is a real PTY when launched as a desktop app.");
+        t.writeln("Run:  \x1b[36mnpm run electron:dev\x1b[0m  to attach to claude / aider / your shell.");
+        t.writeln("");
+        t.writeln("Browser sandbox cannot spawn local processes — the simulated game loop is disabled");
+        t.writeln("to honor your 'no mock' request. Open in Electron to play.");
       } else {
         cq!.listShells().then(setShells).catch(() => {});
       }
