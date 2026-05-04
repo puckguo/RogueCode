@@ -2,6 +2,9 @@ export type CliStatus = "STREAMING" | "IDLE_WAITING" | "ERROR";
 
 export type Rarity = "common" | "magic" | "rare" | "set" | "legendary";
 
+export type FireMode = "normal" | "shotgun" | "burst" | "charge" | "aoe";
+export type SkillKind = "nova" | "laser" | "missile" | "slow";
+
 export type Affix = {
   id: string;
   text: string;
@@ -11,6 +14,14 @@ export type Affix = {
   crit?: number; // %
   dropBonus?: number; // %
   lifesteal?: number; // %
+  // arena weapon/skill modifiers
+  fireMode?: FireMode;
+  fireRate?: number; // additive shots per second
+  projSpeed?: number;
+  range?: number;
+  pierce?: number;
+  skill?: SkillKind;
+  skillCd?: number; // seconds
 };
 
 export type Item = {
