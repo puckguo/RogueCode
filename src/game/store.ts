@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { Card, CliStatus, Enemy, Item, Rarity, TalentNode } from "./types";
+import type { Card, CliSession, CliStatus, Enemy, Item, MythicAffix, Rarity, TalentNode } from "./types";
 import {
   AFFIX_POOL,
   ITEM_NAMES,
@@ -9,6 +9,7 @@ import {
   rollEnemy,
   rollRarity,
   RARITY_AFFIX_COUNT,
+  rollMythicAffixes,
 } from "./data";
 import { writeSaveMd, readSaveMd, writeSkillMd, writeStateMd, appendLogMd } from "./mdStorage";
 
@@ -70,13 +71,17 @@ function shuffle<T>(arr: T[]): T[] {
 type Buff = { atk: number; crit: number; turns: number };
 
 type State = {
-  // CLI
+  // CLI (active session — kept for back-compat with existing UI)
   cliStatus: CliStatus;
   cliBuffer: string;
   tokensPerSec: number;
   combo: number;
   comboTimer: number;
   pendingPrompt: string;
+
+  // Multi-CLI: tabs the user can switch between
+  sessions: CliSession[];
+  activeSessionId: string | null;
 
   // Run
   inRun: boolean;
@@ -101,6 +106,10 @@ type State = {
   totalPoints: number;
   stash: Item[];
 
+  // Mythic Keystone (Arena difficulty)
+  mythicLevel: number;
+  mythicAffixes: MythicAffix[];
+
   // Coding-behavior hooks
   nextDropLegendary: boolean;
   recentEvents: { ts: number; text: string }[];
@@ -112,6 +121,13 @@ type State = {
   setTokensPerSec: (n: number) => void;
   submitPrompt: (prompt: string) => void;
   setPendingPrompt: (s: string) => void;
+
+  // Multi-CLI actions
+  addSession: (label?: string) => string;
+  removeSession: (id: string) => void;
+  setActiveSession: (id: string) => void;
+  renameSession: (id: string, label: string) => void;
+  updateSessionStatus: (id: string, status: CliStatus, hasStarted?: boolean) => void;
 
   startRun: () => void;
   endRun: () => void;
@@ -130,9 +146,20 @@ type State = {
   setShardsAdd: (n: number) => void;
   addInventoryItem: (it: Item, consumeLegendary?: boolean) => void;
 
+  // Mythic actions
+  setMythicLevel: (n: number) => void;
+  rerollMythicAffixes: () => void;
+
   tick: () => void;
   winWave: () => void;
 };
+
+// Derived helper (call with current state). Game is paused if ANY started CLI is not streaming.
+export function isAnyCliIdle(s: Pick<State, "sessions">): boolean {
+  const started = s.sessions.filter((x) => x.hasStarted);
+  if (started.length === 0) return true; // no CLI at all → paused
+  return started.some((x) => x.status !== "STREAMING");
+}
 
 function computeStats(s: Pick<State, "talentRanks" | "equipment">) {
   let atk = 5;
@@ -194,9 +221,71 @@ export const useGame = create<State>()((set, get) => {
     totalPoints: save.totalPoints,
     stash: save.stash,
 
+    sessions: [{ id: "cli_1", label: "CLI 1", status: "IDLE_WAITING", hasStarted: false, lastActivityTs: 0 }],
+    activeSessionId: "cli_1",
+
+    mythicLevel: 1,
+    mythicAffixes: [],
+
     nextDropLegendary: false,
     recentEvents: [],
     runSummary: null,
+
+    addSession: (label?: string) => {
+      const s = get();
+      const n = s.sessions.length + 1;
+      const id = `cli_${Date.now().toString(36)}`;
+      const sess: CliSession = { id, label: label || `CLI ${n}`, status: "IDLE_WAITING", hasStarted: false, lastActivityTs: 0 };
+      set({ sessions: [...s.sessions, sess], activeSessionId: id });
+      return id;
+    },
+    removeSession: (id: string) => {
+      const s = get();
+      const next = s.sessions.filter((x) => x.id !== id);
+      const active = s.activeSessionId === id ? next[0]?.id ?? null : s.activeSessionId;
+      set({ sessions: next.length ? next : [{ id: "cli_1", label: "CLI 1", status: "IDLE_WAITING", hasStarted: false, lastActivityTs: 0 }], activeSessionId: active ?? "cli_1" });
+    },
+    setActiveSession: (id: string) => {
+      const s = get();
+      const sess = s.sessions.find((x) => x.id === id);
+      if (!sess) return;
+      set({ activeSessionId: id, cliStatus: sess.status });
+    },
+    renameSession: (id: string, label: string) => {
+      const s = get();
+      set({ sessions: s.sessions.map((x) => x.id === id ? { ...x, label } : x) });
+    },
+    updateSessionStatus: (id: string, status: CliStatus, hasStarted?: boolean) => {
+      const s = get();
+      const sessions = s.sessions.map((x) =>
+        x.id === id
+          ? {
+              ...x,
+              status,
+              hasStarted: hasStarted ?? x.hasStarted,
+              lastActivityTs: status === "STREAMING" ? Date.now() : x.lastActivityTs,
+            }
+          : x,
+      );
+      const patch: Partial<State> = { sessions };
+      if (s.activeSessionId === id) patch.cliStatus = status;
+      set(patch as any);
+    },
+
+    setMythicLevel: (n: number) => {
+      const lvl = Math.max(1, Math.min(20, Math.floor(n)));
+      const aff = rollMythicAffixes(lvl);
+      set({ mythicLevel: lvl, mythicAffixes: aff });
+    },
+    rerollMythicAffixes: () => {
+      const s = get();
+      // 1 reroll costs 5 shards
+      if (s.shards < 5) return;
+      const aff = rollMythicAffixes(s.mythicLevel, Math.random() * 1e9);
+      const newShards = s.shards - 5;
+      set({ mythicAffixes: aff, shards: newShards });
+      persist({ shards: newShards, talentRanks: s.talentRanks, totalPoints: s.totalPoints, stash: s.stash });
+    },
 
     setCliStatus: (s: CliStatus) => {
       const prev = get().cliStatus;
@@ -571,7 +660,8 @@ export const useGame = create<State>()((set, get) => {
     tick: () => {
       const s = get();
       if (!s.inRun) return;
-      if (s.cliStatus !== "STREAMING") return;
+      // Pause card-mode advancement if any started CLI is idle.
+      if (isAnyCliIdle({ sessions: s.sessions })) return;
       const newComboTimer = s.comboTimer + 1;
       let combo = s.combo;
       if (newComboTimer % 30 === 0) combo += 1;

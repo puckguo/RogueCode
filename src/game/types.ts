@@ -1,5 +1,45 @@
 export type CliStatus = "STREAMING" | "IDLE_WAITING" | "ERROR";
 
+export type CliSession = {
+  id: string;
+  label: string;
+  status: CliStatus;
+  hasStarted: boolean;     // true once user has spawned this PTY at least once
+  lastActivityTs: number;  // ms since epoch — last time we saw STREAMING
+};
+
+// =====================================================================
+// Mythic+ style global affix system (inspired by WoW Mythic Keystones).
+// Affixes apply to every enemy & the arena globally; difficulty scales
+// with `mythicLevel`. Higher level → more affixes + multipliers.
+// =====================================================================
+export type MythicAffixId =
+  | "fortified"   // minions +50% HP
+  | "tyrannical"  // bosses/elites +30% HP, +15% dmg
+  | "raging"      // enemies <50% HP get +50% atk speed (here: +50% move speed)
+  | "bursting"    // on death, leaves a small AOE that damages player
+  | "volcanic"    // periodic ground AOEs (warning then dmg)
+  | "necrotic"    // melee hits stack a HoT debuff (dmg/sec)
+  | "sanguine"    // dead enemies leave healing pools that also slow player
+  | "bolstering"  // killing a minion buffs nearby allies (+atk, +hp)
+  | "explosive"   // periodically spawns explosive orbs the player must shoot
+  | "quaking"     // periodic shockwaves around player slow & damage
+  | "spiteful"    // when an enemy dies, spawns a fast spite shade
+  | "afflicted";  // periodic curses tick player HP
+
+export type MythicAffix = {
+  id: MythicAffixId;
+  name: string;
+  desc: string;
+  unlockLevel: number; // appears at this mythic level and above
+  // tuning hints (read by ArenaStage)
+  enemyHpMul?: number;
+  enemyAtkMul?: number;
+  enemySpeedMul?: number;
+  bossExtraHpMul?: number;
+  bossExtraAtkMul?: number;
+};
+
 export type Rarity = "common" | "magic" | "rare" | "set" | "legendary";
 
 export type FireMode = "normal" | "shotgun" | "burst" | "charge" | "aoe";

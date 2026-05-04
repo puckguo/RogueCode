@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useGame } from "@/game/store";
+import { isAnyCliIdle, useGame } from "@/game/store";
 import { rollItem } from "@/game/arena";
-import { rollArenaUpgrades } from "@/game/data";
-import type { ArenaUpgrade, FireMode, Item, Rarity, SkillKind } from "@/game/types";
+import { rollArenaUpgrades, mythicScale } from "@/game/data";
+import type { ArenaUpgrade, FireMode, Item, MythicAffix, Rarity, SkillKind } from "@/game/types";
 
 type Vec = { x: number; y: number };
 type Entity = Vec & { id: number; hp: number; maxHp: number; r: number };
@@ -10,7 +10,7 @@ type Bullet = Vec & {
   vx: number; vy: number; dmg: number; life: number; crit: boolean;
   pierce: number; aoe?: number; color?: string; size?: number;
 };
-type Enemy = Entity & { atk: number; speed: number; tier: "minion" | "elite" | "boss"; slow: number };
+type Enemy = Entity & { atk: number; speed: number; tier: "minion" | "elite" | "boss"; slow: number; special?: "explosive" | "spite"; fuse?: number; bolster?: number };
 type Pickup = Vec & { id: number; kind: "shard" | "heal" };
 type Fx = Vec & { id: number; r: number; maxR: number; life: number; maxLife: number; color: string };
 type SkillState = { kind: SkillKind; cd: number; max: number; ready: number };
@@ -169,7 +169,17 @@ export function ArenaStage() {
     equipment,
     setShardsAdd,
     addInventoryItem,
+    sessions,
+    mythicLevel,
+    mythicAffixes,
   } = useGame() as any;
+
+  const anyIdle = isAnyCliIdle({ sessions });
+  const mScale = useMemo(() => mythicScale(mythicLevel), [mythicLevel]);
+  const mythicIds = useMemo(
+    () => new Set((mythicAffixes as MythicAffix[]).map((a) => a.id)),
+    [mythicAffixes],
+  );
 
   // In-run upgrades chosen between waves (Brotato style).
   const [runUpgrades, setRunUpgrades] = useState<ArenaUpgrade[]>([]);
@@ -184,6 +194,7 @@ export function ArenaStage() {
     player: {
       x: ARENA_W / 2, y: ARENA_H / 2, hp: 100, maxHp: 100, r: 14,
       speed: 180, atk: 8, crit: 5, fireCd: 0, chargeT: 0,
+      necroticStacks: 0, necroticTimer: 0,
     },
     enemies: [] as Enemy[],
     bullets: [] as Bullet[],
@@ -199,6 +210,13 @@ export function ArenaStage() {
     kills: 0,
     skills: [] as SkillState[],
     loadoutSig: "",
+    // Mythic affix timers
+    volcanicCd: 0,
+    quakeCd: 0,
+    afflictedCd: 0,
+    explosiveCd: 0,
+    sanguinePools: [] as Array<Vec & { life: number }>,
+    volcanoWarn: [] as Array<Vec & { warn: number; r: number }>,
   });
 
   const [, setTick] = useState(0);
@@ -270,7 +288,7 @@ export function ArenaStage() {
       const dt = Math.min(0.05, (now - last) / 1000);
       last = now;
       const st = stateRef.current;
-      const paused = !inRun || cliStatus !== "STREAMING" || st.pendingReward || !!upgradeChoices;
+      const paused = !inRun || anyIdle || st.pendingReward || !!upgradeChoices;
       if (!paused) step(dt);
       draw();
       force();
@@ -279,7 +297,7 @@ export function ArenaStage() {
     raf = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(raf);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [inRun, cliStatus, upgradeChoices]);
+  }, [inRun, anyIdle, upgradeChoices]);
 
   function fireWeapon(angOverride?: number) {
     const st = stateRef.current;
@@ -451,25 +469,139 @@ export function ArenaStage() {
     }
 
     // enemies
+    const raging = mythicIds.has("raging");
+    const necrotic = mythicIds.has("necrotic");
     for (const e of st.enemies) {
       const slowMul = e.slow > 0 ? 0.4 : 1;
       e.slow = Math.max(0, e.slow - dt);
+      // explosive orbs don't move
+      if (e.special === "explosive") {
+        e.fuse = (e.fuse ?? 4) - dt;
+        if (e.fuse <= 0) {
+          // detonate
+          st.fx.push({ id: nextId(), x: e.x, y: e.y, r: 0, maxR: 100, life: 0.4, maxLife: 0.4, color: "#fb923c" });
+          if (Math.hypot(e.x - p.x, e.y - p.y) < 100) p.hp -= 18 + st.wave;
+          e.hp = 0;
+        }
+        continue;
+      }
+      const lowHp = e.hp / e.maxHp < 0.5;
+      const rage = raging && lowHp ? 1.5 : 1;
       const ang = Math.atan2(p.y - e.y, p.x - e.x);
-      e.x += Math.cos(ang) * e.speed * slowMul * dt;
-      e.y += Math.sin(ang) * e.speed * slowMul * dt;
+      e.x += Math.cos(ang) * e.speed * slowMul * rage * dt;
+      e.y += Math.sin(ang) * e.speed * slowMul * rage * dt;
       if (Math.hypot(e.x - p.x, e.y - p.y) < e.r + p.r) {
         p.hp -= e.atk * dt * 2;
+        if (necrotic) {
+          p.necroticStacks = Math.min(20, p.necroticStacks + dt * 2);
+        }
       }
     }
 
-    // dead enemies → pickups
+    // necrotic DoT tick
+    if (necrotic && p.necroticStacks > 0) {
+      p.necroticTimer += dt;
+      if (p.necroticTimer >= 1) {
+        p.hp -= p.necroticStacks * 0.6;
+        p.necroticTimer = 0;
+        // small decay
+        p.necroticStacks = Math.max(0, p.necroticStacks - 1);
+      }
+    }
+
+    // dead enemies → pickups + mythic on-death effects
+    const bursting = mythicIds.has("bursting");
+    const bolstering = mythicIds.has("bolstering");
+    const sanguine = mythicIds.has("sanguine");
+    const spiteful = mythicIds.has("spiteful");
     for (const e of st.enemies) {
       if (e.hp <= 0) {
         st.kills++;
         st.pickups.push({ id: nextId(), x: e.x, y: e.y, kind: Math.random() < 0.1 ? "heal" : "shard" });
+        if (e.special !== "explosive" && e.special !== "spite") {
+          if (bursting) {
+            st.fx.push({ id: nextId(), x: e.x, y: e.y, r: 0, maxR: 60, life: 0.35, maxLife: 0.35, color: "#f43f5e" });
+            if (Math.hypot(e.x - p.x, e.y - p.y) < 60) p.hp -= 8 + st.wave * 0.5;
+          }
+          if (bolstering) {
+            for (const e2 of st.enemies) {
+              if (e2 === e || e2.hp <= 0) continue;
+              if (Math.hypot(e2.x - e.x, e2.y - e.y) < 90) {
+                e2.atk *= 1.1; e2.hp = Math.min(e2.maxHp * 1.2, e2.hp + e2.maxHp * 0.15); e2.maxHp *= 1.1;
+                e2.bolster = (e2.bolster ?? 0) + 1;
+              }
+            }
+          }
+          if (sanguine) {
+            st.sanguinePools.push({ x: e.x, y: e.y, life: 6 });
+          }
+          if (spiteful && Math.random() < 0.7) {
+            spawnSpite(e.x, e.y);
+          }
+        }
       }
     }
     st.enemies = st.enemies.filter((e) => e.hp > 0);
+
+    // sanguine pools heal nearby enemies & slow player
+    if (st.sanguinePools.length) {
+      for (const pool of st.sanguinePools) {
+        pool.life -= dt;
+        for (const e of st.enemies) {
+          if (Math.hypot(e.x - pool.x, e.y - pool.y) < 40) {
+            e.hp = Math.min(e.maxHp, e.hp + 10 * dt);
+          }
+        }
+        if (Math.hypot(p.x - pool.x, p.y - pool.y) < 40) {
+          // slow movement (handled by reducing computed speed bonus this frame is hard;
+          // instead apply a position pull-back: shave 30% movement we already did this frame)
+          // Effectively damping via re-setting position toward previous would be complex; small dmg instead:
+          p.hp -= 2 * dt;
+        }
+      }
+      st.sanguinePools = st.sanguinePools.filter((x) => x.life > 0);
+    }
+
+    // Mythic periodic events
+    if (mythicIds.has("volcanic")) {
+      st.volcanicCd -= dt;
+      if (st.volcanicCd <= 0) {
+        st.volcanicCd = 3 + Math.random() * 2;
+        st.volcanoWarn.push({ x: p.x + (Math.random() - 0.5) * 80, y: p.y + (Math.random() - 0.5) * 80, warn: 1.0, r: 50 });
+      }
+    }
+    for (const v of st.volcanoWarn) {
+      v.warn -= dt;
+      if (v.warn <= 0 && v.warn > -0.05) {
+        st.fx.push({ id: nextId(), x: v.x, y: v.y, r: 0, maxR: v.r, life: 0.4, maxLife: 0.4, color: "#fb923c" });
+        if (Math.hypot(p.x - v.x, p.y - v.y) < v.r) p.hp -= 14 + st.wave;
+      }
+    }
+    st.volcanoWarn = st.volcanoWarn.filter((v) => v.warn > -0.1);
+
+    if (mythicIds.has("quaking")) {
+      st.quakeCd -= dt;
+      if (st.quakeCd <= 0) {
+        st.quakeCd = 5;
+        st.fx.push({ id: nextId(), x: p.x, y: p.y, r: 0, maxR: 110, life: 0.5, maxLife: 0.5, color: "#94a3b8" });
+        p.hp -= 10 + st.wave * 0.5;
+      }
+    }
+    if (mythicIds.has("afflicted")) {
+      st.afflictedCd -= dt;
+      if (st.afflictedCd <= 0) {
+        st.afflictedCd = 4;
+        p.hp -= 6 + st.wave * 0.4;
+        st.fx.push({ id: nextId(), x: p.x, y: p.y, r: 0, maxR: 30, life: 0.3, maxLife: 0.3, color: "#a855f7" });
+      }
+    }
+    if (mythicIds.has("explosive")) {
+      st.explosiveCd -= dt;
+      if (st.explosiveCd <= 0) {
+        st.explosiveCd = 8;
+        spawnExplosive();
+      }
+    }
 
     // fx tick
     for (const f of st.fx) {
@@ -490,8 +622,9 @@ export function ArenaStage() {
       }
       if (dist < p.r + 6) {
         if (pk.kind === "shard") {
-          st.runShards += 1;
-          setShardsAdd?.(1);
+          const reward = Math.max(1, Math.round(mScale.rewardMul));
+          st.runShards += reward;
+          setShardsAdd?.(reward);
         } else {
           p.hp = Math.min(p.maxHp, p.hp + 15);
         }
@@ -525,11 +658,23 @@ export function ArenaStage() {
     const isBoss = wave % 5 === 0 && st.enemies.filter((e) => e.tier === "boss").length === 0 && st.waveTime < 2;
     const elite = !isBoss && Math.random() < 0.1 + wave * 0.01;
     const tier: Enemy["tier"] = isBoss ? "boss" : elite ? "elite" : "minion";
-    const hp = tier === "boss" ? 200 + wave * 40 : tier === "elite" ? 40 + wave * 8 : 12 + wave * 3;
-    const atk = tier === "boss" ? 25 + wave : tier === "elite" ? 12 + wave / 2 : 6 + wave / 3;
-    const speed = tier === "boss" ? 55 : tier === "elite" ? 75 : 95;
-    const side = Math.floor(Math.random() * 4);
+    let hp = tier === "boss" ? 200 + wave * 40 : tier === "elite" ? 40 + wave * 8 : 12 + wave * 3;
+    let atk = tier === "boss" ? 25 + wave : tier === "elite" ? 12 + wave / 2 : 6 + wave / 3;
+    let speed = tier === "boss" ? 55 : tier === "elite" ? 75 : 95;
+
+    // Mythic global scale
+    hp = Math.round(hp * mScale.hpMul);
+    atk = atk * mScale.atkMul;
+
+    // Affix-specific scaling
+    if (mythicIds.has("fortified") && tier === "minion") hp = Math.round(hp * 1.5);
+    if (mythicIds.has("tyrannical") && (tier === "boss" || tier === "elite")) {
+      hp = Math.round(hp * 1.3);
+      atk = atk * 1.15;
+    }
+
     const r = tier === "boss" ? 26 : tier === "elite" ? 18 : 12;
+    const side = Math.floor(Math.random() * 4);
     const pos =
       side === 0 ? { x: Math.random() * ARENA_W, y: -r } :
       side === 1 ? { x: ARENA_W + r, y: Math.random() * ARENA_H } :
@@ -537,6 +682,27 @@ export function ArenaStage() {
       { x: -r, y: Math.random() * ARENA_H };
     st.enemies.push({ id: nextId(), x: pos.x, y: pos.y, hp, maxHp: hp, atk, speed, r, tier, slow: 0 });
   }
+
+  function spawnExplosive() {
+    const st = stateRef.current;
+    const x = 60 + Math.random() * (ARENA_W - 120);
+    const y = 60 + Math.random() * (ARENA_H - 120);
+    const hp = 8 + st.wave * 2;
+    st.enemies.push({
+      id: nextId(), x, y, hp, maxHp: hp, atk: 0, speed: 0, r: 9, tier: "minion",
+      slow: 0, special: "explosive", fuse: 4,
+    });
+  }
+
+  function spawnSpite(x: number, y: number) {
+    const st = stateRef.current;
+    const hp = 10 + st.wave * 2;
+    st.enemies.push({
+      id: nextId(), x, y, hp, maxHp: hp, atk: 4 + st.wave * 0.5, speed: 160, r: 8,
+      tier: "minion", slow: 0, special: "spite",
+    });
+  }
+
 
   function nearestEnemy(p: Vec, range: number) {
     const st = stateRef.current;
@@ -554,8 +720,11 @@ export function ArenaStage() {
     Object.assign(stateRef.current, {
       enemies: [], bullets: [], pickups: [], fx: [], waveTime: 0, wave: 1,
       spawnCd: 0, pendingReward: false, runShards: 0, kills: 0,
+      volcanicCd: 3, quakeCd: 5, afflictedCd: 4, explosiveCd: 6,
+      sanguinePools: [], volcanoWarn: [],
     });
     p.x = ARENA_W / 2; p.y = ARENA_H / 2; p.hp = p.maxHp; p.chargeT = 0;
+    p.necroticStacks = 0; p.necroticTimer = 0;
     for (const sk of stateRef.current.skills) sk.cd = sk.max * 0.5;
     setRunUpgrades([]);
     setUpgradeChoices(null);
@@ -616,13 +785,43 @@ export function ArenaStage() {
       }
     }
 
+    // Sanguine pools (under enemies)
+    for (const pool of st.sanguinePools) {
+      const a = Math.min(1, pool.life / 6);
+      ctx.fillStyle = `rgba(220,38,38,${0.25 * a})`;
+      ctx.beginPath(); ctx.arc(pool.x, pool.y, 40, 0, Math.PI * 2); ctx.fill();
+    }
+    // Volcanic warning circles
+    for (const v of st.volcanoWarn) {
+      if (v.warn > 0) {
+        ctx.strokeStyle = `rgba(251,146,60,${0.5 + 0.5 * Math.sin(v.warn * 8)})`;
+        ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.arc(v.x, v.y, v.r, 0, Math.PI * 2); ctx.stroke();
+        ctx.lineWidth = 1;
+      }
+    }
+
     for (const pk of st.pickups) {
       ctx.fillStyle = pk.kind === "shard" ? "#7dd3fc" : "#f87171";
       ctx.beginPath(); ctx.arc(pk.x, pk.y, 4, 0, Math.PI * 2); ctx.fill();
     }
     for (const e of st.enemies) {
-      ctx.fillStyle = e.tier === "boss" ? "#f59e0b" : e.tier === "elite" ? "#a78bfa" : "#ef4444";
+      ctx.fillStyle = e.special === "explosive"
+        ? "#fb923c"
+        : e.special === "spite"
+          ? "#c084fc"
+          : e.tier === "boss" ? "#f59e0b" : e.tier === "elite" ? "#a78bfa" : "#ef4444";
       ctx.beginPath(); ctx.arc(e.x, e.y, e.r, 0, Math.PI * 2); ctx.fill();
+      if (e.special === "explosive" && e.fuse !== undefined) {
+        ctx.strokeStyle = `rgba(251,146,60,${0.4 + 0.6 * Math.sin(e.fuse * 12)})`;
+        ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.arc(e.x, e.y, e.r + 4, 0, Math.PI * 2); ctx.stroke();
+        ctx.lineWidth = 1;
+      }
+      if (e.bolster) {
+        ctx.strokeStyle = "rgba(250,204,21,0.7)";
+        ctx.beginPath(); ctx.arc(e.x, e.y, e.r + 2, 0, Math.PI * 2); ctx.stroke();
+      }
       if (e.slow > 0) {
         ctx.strokeStyle = "rgba(148,163,184,0.7)";
         ctx.beginPath(); ctx.arc(e.x, e.y, e.r + 3, 0, Math.PI * 2); ctx.stroke();
@@ -650,7 +849,8 @@ export function ArenaStage() {
   }
 
   const st = stateRef.current;
-  const paused = !inRun || cliStatus !== "STREAMING";
+  const paused = !inRun || anyIdle;
+  const idleCount = (sessions as any[]).filter((x) => x.hasStarted && x.status !== "STREAMING").length;
 
   return (
     <div className="relative flex h-full flex-col rounded-lg border bg-card overflow-hidden">
@@ -660,6 +860,9 @@ export function ArenaStage() {
           <div>{Math.max(0, Math.ceil(st.waveDuration - st.waveTime))}s</div>
           <div>Kills {st.kills}</div>
           <div>+⟡ {st.runShards}</div>
+          <div className="rounded border border-rarity-legendary/60 bg-rarity-legendary/10 px-2 py-0.5 text-rarity-legendary">
+            ⚷ Mythic +{mythicLevel}
+          </div>
         </div>
         <div className="flex gap-2">
           {!inRun ? (
@@ -669,6 +872,25 @@ export function ArenaStage() {
           )}
         </div>
       </div>
+
+      {/* Mythic affix bar */}
+      {(mythicAffixes as MythicAffix[]).length > 0 && (
+        <div className="flex flex-wrap items-center gap-1 border-b bg-destructive/5 px-3 py-1.5 text-[10px]">
+          <span className="text-muted-foreground uppercase tracking-wider">Affixes:</span>
+          {(mythicAffixes as MythicAffix[]).map((a) => (
+            <span
+              key={a.id}
+              title={a.desc}
+              className="rounded border border-destructive/40 bg-destructive/10 px-1.5 py-0.5 text-destructive"
+            >
+              {a.name}
+            </span>
+          ))}
+          <span className="ml-auto text-muted-foreground">
+            HP×{mScale.hpMul.toFixed(2)} · DMG×{mScale.atkMul.toFixed(2)} · Loot×{mScale.rewardMul.toFixed(2)}
+          </span>
+        </div>
+      )}
 
       <div className="relative flex flex-1 items-center justify-center bg-background/30 p-2">
         <canvas
@@ -683,8 +905,8 @@ export function ArenaStage() {
           <div className="absolute inset-0 grid place-items-center bg-background/80 backdrop-blur-sm">
             <div className="text-center">
               <div className="text-5xl">⏸</div>
-              <div className="mt-2 font-bold">AI is idle</div>
-              <div className="text-xs text-muted-foreground">Send a prompt to your CLI to resume.</div>
+              <div className="mt-2 font-bold">{idleCount > 0 ? `${idleCount} CLI idle` : "AI is idle"}</div>
+              <div className="text-xs text-muted-foreground">Send a prompt to the blinking CLI tab to resume.</div>
             </div>
           </div>
         )}
