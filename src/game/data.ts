@@ -240,3 +240,50 @@ export function rollArenaUpgrades(magicFind: number, count = 3): ArenaUpgrade[] 
   return picked;
 }
 
+// =====================================================================
+// MYTHIC KEYSTONE AFFIXES — global Arena difficulty modifiers.
+// Mirrors WoW Mythic+: every level adds an enemy HP/dmg scalar and at
+// breakpoints adds a new named affix on top.
+// =====================================================================
+export const MYTHIC_AFFIXES: MythicAffix[] = [
+  { id: "fortified",  name: "Fortified",  unlockLevel: 2,  desc: "Minions have +50% HP.",                 enemyHpMul: 1.5 },
+  { id: "tyrannical", name: "Tyrannical", unlockLevel: 2,  desc: "Bosses & elites: +30% HP, +15% dmg.",   bossExtraHpMul: 1.3, bossExtraAtkMul: 1.15 },
+  { id: "raging",     name: "Raging",     unlockLevel: 4,  desc: "Enemies below 50% HP gain +50% speed.", enemySpeedMul: 1.0 },
+  { id: "bursting",   name: "Bursting",   unlockLevel: 4,  desc: "Slain enemies explode for AOE damage." },
+  { id: "volcanic",   name: "Volcanic",   unlockLevel: 6,  desc: "Lava patches periodically erupt under the player." },
+  { id: "necrotic",   name: "Necrotic",   unlockLevel: 6,  desc: "Enemy melee inflicts a stacking damage-over-time." },
+  { id: "sanguine",   name: "Sanguine",   unlockLevel: 8,  desc: "Corpses leave healing pools that also slow the player." },
+  { id: "bolstering", name: "Bolstering", unlockLevel: 8,  desc: "Killing a minion buffs nearby allies (+atk, +hp)." },
+  { id: "explosive",  name: "Explosive",  unlockLevel: 10, desc: "Explosive orbs spawn — destroy them before they detonate." },
+  { id: "quaking",    name: "Quaking",    unlockLevel: 10, desc: "Periodic shockwaves around the player slow & damage." },
+  { id: "spiteful",   name: "Spiteful",   unlockLevel: 12, desc: "Slain enemies spawn a fast spite shade chasing the player." },
+  { id: "afflicted",  name: "Afflicted",  unlockLevel: 14, desc: "Curses periodically tick the player's HP." },
+];
+
+// Pick a stable affix set for a given mythic level (deterministic-ish per session via seed).
+// Rules: lvl 1 = none. 2-3 = 1 affix. 4-6 = 2. 7-9 = 3. 10+ = 4 affixes.
+export function rollMythicAffixes(level: number, seed = Date.now()): MythicAffix[] {
+  if (level <= 1) return [];
+  const slots = level >= 10 ? 4 : level >= 7 ? 3 : level >= 4 ? 2 : 1;
+  const eligible = MYTHIC_AFFIXES.filter((a) => level >= a.unlockLevel);
+  // simple LCG so repeated rerolls don't collapse to the same set
+  let s = seed >>> 0;
+  const rand = () => { s = (s * 1664525 + 1013904223) >>> 0; return s / 0xffffffff; };
+  const pool = [...eligible];
+  const out: MythicAffix[] = [];
+  for (let i = 0; i < slots && pool.length > 0; i++) {
+    const idx = Math.floor(rand() * pool.length);
+    out.push(pool.splice(idx, 1)[0]);
+  }
+  return out;
+}
+
+// Global enemy multipliers from mythic level (compounding +8% HP / +5% dmg per level).
+export function mythicScale(level: number) {
+  const lv = Math.max(1, level);
+  return {
+    hpMul: Math.pow(1.08, lv - 1),
+    atkMul: Math.pow(1.05, lv - 1),
+    rewardMul: 1 + (lv - 1) * 0.15, // shards scale with level
+  };
+}
