@@ -37,6 +37,23 @@ export const AFFIX_POOL: Affix[] = [
   { id: "drop2", text: "+25% Magic Find", dropBonus: 25 },
   { id: "ls1", text: "+3% Lifesteal", lifesteal: 3 },
   { id: "ls2", text: "+8% Lifesteal", lifesteal: 8 },
+  // weapon firing modes
+  { id: "fm_shot", text: "Shotgun: 5-spread", fireMode: "shotgun" },
+  { id: "fm_burst", text: "Burst: 3-round", fireMode: "burst" },
+  { id: "fm_charge", text: "Charge Beam (heavy)", fireMode: "charge" },
+  { id: "fm_aoe", text: "AOE Mortar", fireMode: "aoe" },
+  // weapon stats
+  { id: "rof1", text: "+0.6/s Fire Rate", fireRate: 0.6 },
+  { id: "rof2", text: "+1.2/s Fire Rate", fireRate: 1.2 },
+  { id: "ps1", text: "+120 Projectile Speed", projSpeed: 120 },
+  { id: "rng1", text: "+80 Range", range: 80 },
+  { id: "pi1", text: "Pierce +1", pierce: 1 },
+  { id: "pi2", text: "Pierce +2", pierce: 2 },
+  // active skills (auto-cast on cooldown)
+  { id: "sk_nova", text: "Skill: Nova Burst", skill: "nova", skillCd: 6 },
+  { id: "sk_laser", text: "Skill: Laser Sweep", skill: "laser", skillCd: 9 },
+  { id: "sk_missile", text: "Skill: Homing Missiles", skill: "missile", skillCd: 5 },
+  { id: "sk_slow", text: "Skill: Time Warp (slow)", skill: "slow", skillCd: 12 },
 ];
 
 export const ITEM_NAMES: Record<string, string[]> = {
