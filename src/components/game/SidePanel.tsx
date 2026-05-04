@@ -1,7 +1,30 @@
+import { useState } from "react";
 import { useGame } from "@/game/store";
-import type { Item, Rarity } from "@/game/types";
+import type { Item, Rarity, TalentNode } from "@/game/types";
 import { TALENT_TREE } from "@/game/data";
 import { motion, AnimatePresence } from "framer-motion";
+
+// Branch metadata derived from TALENT_TREE quadrants (x/y in 0..100).
+// Branch is determined by which quadrant the node sits in relative to the
+// central "core" node at (50, 50). The core itself is shown as its own root.
+const TALENT_BRANCHES = {
+  core: { name: "Awakening", color: "text-amber-300", short: "★" },
+  offense: { name: "Offense — Sharpened Mind", color: "text-rose-400", short: "⚔" },
+  defense: { name: "Defense — Iron Will", color: "text-sky-400", short: "🛡" },
+  greed: { name: "Greed — Treasure Hunter", color: "text-emerald-400", short: "💰" },
+  tech: { name: "Arena-Tech — Hyper Trigger", color: "text-violet-400", short: "⚙" },
+} as const;
+type BranchKey = keyof typeof TALENT_BRANCHES;
+
+function branchOf(n: TalentNode): BranchKey {
+  if (n.id === "core") return "core";
+  const left = n.x < 50;
+  const top = n.y < 50;
+  if (top && left) return "offense";
+  if (top && !left) return "defense";
+  if (!top && left) return "greed";
+  return "tech";
+}
 
 const rarityClass: Record<Rarity, string> = {
   common: "text-rarity-common border-rarity-common/40",
