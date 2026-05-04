@@ -128,6 +128,43 @@ export function SidePanel() {
         )}
       </div>
 
+      {/* Mythic Keystone */}
+      <div className="rounded-lg border border-rarity-legendary/40 bg-card p-3">
+        <div className="mb-2 flex items-center justify-between text-xs">
+          <div className="font-bold uppercase tracking-wider text-rarity-legendary">⚷ Mythic Keystone</div>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => setMythicLevel(Math.max(1, (mythicLevel || 1) - 1))}
+              className="rounded border border-border px-2 text-muted-foreground hover:text-foreground"
+            >−</button>
+            <span className="w-10 text-center font-mono text-sm text-rarity-legendary">+{mythicLevel || 1}</span>
+            <button
+              onClick={() => setMythicLevel(Math.min(20, (mythicLevel || 1) + 1))}
+              className="rounded border border-border px-2 text-muted-foreground hover:text-foreground"
+            >+</button>
+            <button
+              onClick={rerollMythicAffixes}
+              title="Reroll affixes (5 ⟡)"
+              className="ml-1 rounded border border-border px-2 text-[10px] text-muted-foreground hover:text-primary"
+            >↻ 5⟡</button>
+          </div>
+        </div>
+        <div className="flex flex-wrap gap-1">
+          {(mythicAffixes || []).length === 0 && (
+            <div className="text-[10px] text-muted-foreground">Lvl 1: no affixes. Raise level for global Arena modifiers & better loot.</div>
+          )}
+          {(mythicAffixes || []).map((a: { id: string; name: string; desc: string }) => (
+            <span
+              key={a.id}
+              title={a.desc}
+              className="rounded border border-destructive/40 bg-destructive/10 px-1.5 py-0.5 text-[10px] text-destructive"
+            >
+              {a.name}
+            </span>
+          ))}
+        </div>
+      </div>
+
       {/* Tabs (simple) */}
       <div className="flex flex-1 flex-col gap-3 overflow-hidden">
         {/* Equipment */}
