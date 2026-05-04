@@ -57,6 +57,31 @@ export type Enemy = {
   intent: number; // damage they will do next turn
 };
 
+// In-run roguelike upgrade (Arena mode). Pure additive modifiers.
+export type ArenaUpgrade = {
+  id: string;
+  name: string;
+  desc: string;
+  rarity: Rarity;
+  // Stat deltas applied to the arena player loadout.
+  atk?: number;
+  hp?: number;
+  crit?: number;
+  speed?: number;
+  fireRate?: number;
+  projSpeed?: number;
+  range?: number;
+  pierce?: number;
+  lifesteal?: number;        // % of damage healed
+  magnet?: number;           // pickup radius bonus
+  dmgMul?: number;           // multiplicative damage (1.1 = +10%)
+  hpRegen?: number;          // per second
+  // Granting / changing weapons & skills:
+  setFireMode?: FireMode;
+  grantSkill?: SkillKind;    // adds new skill if not present
+  skillCdMul?: number;       // multiply all skill cooldowns (0.85 = -15% cd)
+};
+
 export type TalentNode = {
   id: string;
   name: string;
@@ -65,5 +90,20 @@ export type TalentNode = {
   y: number;
   maxRank: number;
   requires?: string[];
-  effect: { atk?: number; hp?: number; crit?: number; dropBonus?: number; energy?: number };
+  effect: {
+    atk?: number;
+    hp?: number;
+    crit?: number;
+    dropBonus?: number;
+    energy?: number;
+    lifesteal?: number;
+    fireRate?: number;
+    projSpeed?: number;
+    range?: number;
+    pierce?: number;
+    speed?: number;
+    skillCdMul?: number; // additive reduction per rank, e.g. 0.05 = -5% per rank
+    magnet?: number;
+    hpRegen?: number;
+  };
 };

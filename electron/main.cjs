@@ -16,8 +16,20 @@ const isDev = !!process.env.CODEQUEST_DEV_URL;
 
 /** @type {Map<string, any>} */
 const sessions = new Map();
-/** @type {Map<string, { status: string, lastOutput: number, buffer: string }>} */
+/**
+ * @type {Map<string, {
+ *   status: string,
+ *   lastOutput: number,
+ *   buffer: string,
+ *   lastUserWrite: number,
+ *   pendingEchoBytes: number,
+ *   aiBytesWindow: number,
+ *   windowStart: number
+ * }>}
+ */
 const sessionState = new Map();
+const ECHO_WINDOW_MS = 200;     // data within this window after a user keypress is treated as terminal echo
+const AI_ACTIVE_THRESHOLD = 24; // need this many net AI bytes per ~400ms window to be considered STREAMING
 
 let mainWindow;
 let idleWatcher;
@@ -79,6 +91,11 @@ function startIdleWatcher() {
   idleWatcher = setInterval(() => {
     const now = Date.now();
     for (const [id, st] of sessionState.entries()) {
+      // reset rolling AI byte window
+      if (now - st.windowStart > 400) {
+        st.aiBytesWindow = 0;
+        st.windowStart = now;
+      }
       if (st.status === "STREAMING" && now - st.lastOutput > 1500) {
         st.status = "IDLE_WAITING";
         broadcast("pty:status", { id, status: "IDLE_WAITING" });
@@ -121,15 +138,38 @@ ipcMain.handle("pty:spawn", (_evt, opts) => {
       env: { ...process.env, PATH: fullPath, TERM: "xterm-256color", FORCE_COLOR: "1" },
     });
     sessions.set(id, proc);
-    sessionState.set(id, { status: "IDLE_WAITING", lastOutput: Date.now(), buffer: "" });
+    sessionState.set(id, {
+      status: "IDLE_WAITING", lastOutput: Date.now(), buffer: "",
+      lastUserWrite: 0, pendingEchoBytes: 0, aiBytesWindow: 0, windowStart: Date.now(),
+    });
     proc.onData((data) => {
       const st = sessionState.get(id);
       if (st) {
-        const wasIdle = st.status !== "STREAMING";
-        st.lastOutput = Date.now();
-        st.status = "STREAMING";
+        const now = Date.now();
+        const len = data.length;
+        // Discount bytes that look like terminal echo of recent user keystrokes.
+        let aiBytes = len;
+        if (st.pendingEchoBytes > 0 && now - st.lastUserWrite < ECHO_WINDOW_MS) {
+          const eaten = Math.min(st.pendingEchoBytes, len);
+          aiBytes -= eaten;
+          st.pendingEchoBytes -= eaten;
+        }
+        if (now - st.windowStart > 400) {
+          st.aiBytesWindow = 0;
+          st.windowStart = now;
+        }
+        st.aiBytesWindow += aiBytes;
         st.buffer = (st.buffer + data).slice(-2000);
-        if (wasIdle) broadcast("pty:status", { id, status: "STREAMING" });
+
+        // Flip to STREAMING only when the AI is producing meaningful output,
+        // not when the user is just typing into the terminal.
+        if (st.aiBytesWindow >= AI_ACTIVE_THRESHOLD) {
+          st.lastOutput = now;
+          if (st.status !== "STREAMING") {
+            st.status = "STREAMING";
+            broadcast("pty:status", { id, status: "STREAMING" });
+          }
+        }
       }
       broadcast("pty:data", { id, data });
     });
@@ -148,6 +188,13 @@ ipcMain.handle("pty:spawn", (_evt, opts) => {
 ipcMain.handle("pty:write", (_evt, { id, data }) => {
   const proc = sessions.get(id);
   if (!proc) return { ok: false };
+  const st = sessionState.get(id);
+  if (st) {
+    st.lastUserWrite = Date.now();
+    // Most TTYs echo each typed char; CR (\r) is often echoed as \r\n. Reserve a small allowance.
+    const extra = (String(data).match(/\r/g) || []).length;
+    st.pendingEchoBytes = Math.min(2048, (st.pendingEchoBytes || 0) + String(data).length + extra);
+  }
   try { proc.write(data); return { ok: true }; }
   catch (e) { return { ok: false, error: String(e) }; }
 });

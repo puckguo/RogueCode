@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useGame } from "@/game/store";
 import { rollItem } from "@/game/arena";
-import type { FireMode, SkillKind, Item } from "@/game/types";
+import { rollArenaUpgrades } from "@/game/data";
+import type { ArenaUpgrade, FireMode, Item, Rarity, SkillKind } from "@/game/types";
 
 type Vec = { x: number; y: number };
 type Entity = Vec & { id: number; hp: number; maxHp: number; r: number };
@@ -26,16 +27,34 @@ type DerivedLoadout = {
   projSpeed: number;
   range: number;
   pierce: number;
+  dmgMul: number;
+  magnet: number;        // pickup-magnet radius bonus
+  hpRegen: number;       // hp/sec
+  lifesteal: number;     // %
+  speedBonus: number;    // additive move speed
   skills: SkillState[];
 };
 
-function deriveLoadout(equipment: Record<string, Item | undefined>): DerivedLoadout {
+function deriveLoadout(
+  equipment: Record<string, Item | undefined>,
+  talentRanks: Record<string, number>,
+  runUpgrades: ArenaUpgrade[],
+): DerivedLoadout {
   let fireMode: FireMode = "normal";
   let fireRate = 2.5;
   let projSpeed = 480;
   let range = 320;
   let pierce = 0;
-  const skills: SkillState[] = [];
+  let dmgMul = 1;
+  let magnet = 0;
+  let hpRegen = 0;
+  let lifesteal = 0;
+  let speedBonus = 0;
+  let skillCdMul = 1; // multiplier; 0.85 = -15% cd
+
+  const skillEntries: Array<{ kind: SkillKind; cd: number }> = [];
+
+  // Equipment affixes
   for (const it of Object.values(equipment)) {
     if (!it) continue;
     for (const a of it.affixes) {
@@ -44,15 +63,67 @@ function deriveLoadout(equipment: Record<string, Item | undefined>): DerivedLoad
       if (a.projSpeed) projSpeed += a.projSpeed;
       if (a.range) range += a.range;
       if (a.pierce) pierce += a.pierce;
-      if (a.skill && a.skillCd) {
-        // dedupe by kind, keep lowest cd
-        const exist = skills.find((s) => s.kind === a.skill);
-        if (exist) exist.max = Math.min(exist.max, a.skillCd);
-        else skills.push({ kind: a.skill, cd: 0, max: a.skillCd, ready: 1 });
-      }
+      if (a.lifesteal) lifesteal += a.lifesteal;
+      if (a.skill && a.skillCd) skillEntries.push({ kind: a.skill, cd: a.skillCd });
     }
   }
-  return { fireMode, fireRate, projSpeed, range, pierce, skills };
+
+  // Talents
+  for (const [id, rank] of Object.entries(talentRanks)) {
+    if (!rank) continue;
+    // Match by id prefix → known effects (mirrors data.ts)
+    // We rely on effect carried via the actual TALENT_TREE walk instead — see below.
+  }
+  // Use the actual TALENT_TREE-resolved effects via dynamic import-free lookup.
+  // (We import TALENT_TREE only to read effects — but to avoid a circular import here,
+  // we do a tiny inline walk via a list of known effect keys.)
+  // Simpler: re-import.
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { TALENT_TREE } = require("@/game/data") as typeof import("@/game/data");
+  for (const node of TALENT_TREE) {
+    const r = talentRanks[node.id] || 0;
+    if (!r) continue;
+    fireRate += (node.effect.fireRate || 0) * r;
+    projSpeed += (node.effect.projSpeed || 0) * r;
+    range += (node.effect.range || 0) * r;
+    pierce += (node.effect.pierce || 0) * r;
+    speedBonus += (node.effect.speed || 0) * r;
+    magnet += (node.effect.magnet || 0) * r;
+    hpRegen += (node.effect.hpRegen || 0) * r;
+    lifesteal += (node.effect.lifesteal || 0) * r;
+    skillCdMul *= 1 - (node.effect.skillCdMul || 0) * r;
+  }
+
+  // In-run upgrades
+  for (const u of runUpgrades) {
+    if (u.fireRate) fireRate += u.fireRate;
+    if (u.projSpeed) projSpeed += u.projSpeed;
+    if (u.range) range += u.range;
+    if (u.pierce) pierce += u.pierce;
+    if (u.dmgMul) dmgMul *= u.dmgMul;
+    if (u.magnet) magnet += u.magnet;
+    if (u.hpRegen) hpRegen += u.hpRegen;
+    if (u.lifesteal) lifesteal += u.lifesteal;
+    if (u.speed) speedBonus += u.speed;
+    if (u.setFireMode) fireMode = u.setFireMode;
+    if (u.skillCdMul) skillCdMul *= u.skillCdMul;
+    if (u.grantSkill) {
+      const cd = u.grantSkill === "missile" ? 5 : u.grantSkill === "nova" ? 6 : u.grantSkill === "laser" ? 9 : 12;
+      skillEntries.push({ kind: u.grantSkill, cd });
+    }
+  }
+
+  // Dedupe skills by kind (keep min cd) and apply skillCdMul
+  const byKind = new Map<SkillKind, number>();
+  for (const sk of skillEntries) {
+    const cur = byKind.get(sk.kind);
+    byKind.set(sk.kind, cur === undefined ? sk.cd : Math.min(cur, sk.cd));
+  }
+  const skills: SkillState[] = Array.from(byKind.entries()).map(([kind, cd]) => ({
+    kind, cd: 0, max: Math.max(1, cd * skillCdMul), ready: 1,
+  }));
+
+  return { fireMode, fireRate, projSpeed, range, pierce, dmgMul, magnet, hpRegen, lifesteal, speedBonus, skills };
 }
 
 const SKILL_LABEL: Record<SkillKind, { name: string; icon: string }> = {
@@ -70,6 +141,21 @@ const FIRE_LABEL: Record<FireMode, string> = {
   aoe: "AOE Mortar",
 };
 
+const rarityText: Record<Rarity, string> = {
+  common: "text-rarity-common",
+  magic: "text-rarity-magic",
+  rare: "text-rarity-rare",
+  set: "text-rarity-set",
+  legendary: "text-rarity-legendary",
+};
+const rarityBorder: Record<Rarity, string> = {
+  common: "border-rarity-common/40",
+  magic: "border-rarity-magic/50",
+  rare: "border-rarity-rare/60",
+  set: "border-rarity-set/60",
+  legendary: "border-rarity-legendary/70",
+};
+
 export function ArenaStage() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
@@ -85,7 +171,14 @@ export function ArenaStage() {
     addInventoryItem,
   } = useGame() as any;
 
-  const loadout = useMemo(() => deriveLoadout(equipment), [equipment]);
+  // In-run upgrades chosen between waves (Brotato style).
+  const [runUpgrades, setRunUpgrades] = useState<ArenaUpgrade[]>([]);
+  const [upgradeChoices, setUpgradeChoices] = useState<ArenaUpgrade[] | null>(null);
+
+  const loadout = useMemo(
+    () => deriveLoadout(equipment, talentRanks, runUpgrades),
+    [equipment, talentRanks, runUpgrades],
+  );
 
   const stateRef = useRef({
     player: {
@@ -111,7 +204,7 @@ export function ArenaStage() {
   const [, setTick] = useState(0);
   const force = () => setTick((t) => (t + 1) % 1000000);
 
-  // Sync derived stats from talents/equipment
+  // Sync derived stats from talents + equipment + in-run upgrades
   useEffect(() => {
     const s = stateRef.current.player;
     let atk = 8;
@@ -125,18 +218,27 @@ export function ArenaStage() {
         crit += a.crit || 0;
       }
     }
-    Object.entries(talentRanks as Record<string, number>).forEach(([id, r]) => {
-      if (id.startsWith("atk")) atk += r;
-      if (id.startsWith("hp")) hp += r * 8;
-      if (id.startsWith("crit")) crit += r * 2;
-    });
-    s.atk = atk;
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { TALENT_TREE } = require("@/game/data") as typeof import("@/game/data");
+    for (const node of TALENT_TREE) {
+      const r = (talentRanks as Record<string, number>)[node.id] || 0;
+      if (!r) continue;
+      atk += (node.effect.atk || 0) * r;
+      hp += (node.effect.hp || 0) * r;
+      crit += (node.effect.crit || 0) * r;
+    }
+    for (const u of runUpgrades) {
+      atk += u.atk || 0;
+      hp += u.hp || 0;
+      crit += u.crit || 0;
+    }
+    s.atk = Math.round(atk * loadout.dmgMul);
     s.maxHp = hp;
     if (!s.hp) s.hp = hp;
     s.hp = Math.min(s.hp, hp);
     s.crit = crit;
+    s.speed = 180 + loadout.speedBonus;
 
-    // sync skill list (preserve cooldown progress where possible)
     const sig = loadout.skills.map((sk) => `${sk.kind}:${sk.max}`).join("|");
     if (sig !== stateRef.current.loadoutSig) {
       const prev = stateRef.current.skills;
@@ -146,7 +248,7 @@ export function ArenaStage() {
       });
       stateRef.current.loadoutSig = sig;
     }
-  }, [equipment, talentRanks, loadout]);
+  }, [equipment, talentRanks, loadout, runUpgrades]);
 
   // Input
   useEffect(() => {
@@ -168,7 +270,7 @@ export function ArenaStage() {
       const dt = Math.min(0.05, (now - last) / 1000);
       last = now;
       const st = stateRef.current;
-      const paused = !inRun || cliStatus !== "STREAMING" || st.pendingReward;
+      const paused = !inRun || cliStatus !== "STREAMING" || st.pendingReward || !!upgradeChoices;
       if (!paused) step(dt);
       draw();
       force();
@@ -177,7 +279,7 @@ export function ArenaStage() {
     raf = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(raf);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [inRun, cliStatus]);
+  }, [inRun, cliStatus, upgradeChoices]);
 
   function fireWeapon(angOverride?: number) {
     const st = stateRef.current;
@@ -324,6 +426,9 @@ export function ArenaStage() {
         const hitR = e.r + (b.size ?? 4);
         if (Math.hypot(e.x - b.x, e.y - b.y) < hitR) {
           e.hp -= b.dmg;
+          if (loadout.lifesteal > 0) {
+            p.hp = Math.min(p.maxHp, p.hp + (b.dmg * loadout.lifesteal) / 100);
+          }
           if (b.aoe) {
             st.fx.push({ id: nextId(), x: b.x, y: b.y, r: 0, maxR: b.aoe, life: 0.3, maxLife: 0.3, color: b.color || "#fb923c" });
             for (const e2 of st.enemies) {
@@ -339,6 +444,11 @@ export function ArenaStage() {
       }
     }
     st.bullets = st.bullets.filter((b) => b.life > 0 && b.x > -20 && b.x < ARENA_W + 20 && b.y > -20 && b.y < ARENA_H + 20);
+
+    // passive HP regen
+    if (loadout.hpRegen > 0 && p.hp < p.maxHp) {
+      p.hp = Math.min(p.maxHp, p.hp + loadout.hpRegen * dt);
+    }
 
     // enemies
     for (const e of st.enemies) {
@@ -370,9 +480,10 @@ export function ArenaStage() {
     st.fx = st.fx.filter((f) => f.life > 0);
 
     // pickup magnet + pick
+    const magnetR = 90 + loadout.magnet;
     for (const pk of st.pickups) {
       const dist = Math.hypot(pk.x - p.x, pk.y - p.y);
-      if (dist < 90) {
+      if (dist < magnetR) {
         const ang = Math.atan2(p.y - pk.y, p.x - pk.x);
         pk.x += Math.cos(ang) * 240 * dt;
         pk.y += Math.sin(ang) * 240 * dt;
@@ -395,9 +506,12 @@ export function ArenaStage() {
       st.wave += 1;
       st.pendingReward = true;
       const isBoss = (st.wave - 1) % 5 === 0;
-      const force = nextDropLegendary ? "legendary" : isBoss ? "rare" : undefined;
-      const it = rollItem(st.wave, 0, force);
+      const forcedRarity: Rarity | undefined = nextDropLegendary ? "legendary" : isBoss ? "rare" : undefined;
+      const it = rollItem(st.wave, 0, forcedRarity);
       addInventoryItem?.(it, !!nextDropLegendary);
+      // Offer 3 in-run upgrades to choose from (Brotato style).
+      // Magic find scales with wave count.
+      setUpgradeChoices(rollArenaUpgrades(st.wave * 2));
     }
 
     if (p.hp <= 0) {
@@ -443,10 +557,25 @@ export function ArenaStage() {
     });
     p.x = ARENA_W / 2; p.y = ARENA_H / 2; p.hp = p.maxHp; p.chargeT = 0;
     for (const sk of stateRef.current.skills) sk.cd = sk.max * 0.5;
+    setRunUpgrades([]);
+    setUpgradeChoices(null);
   }
 
   function nextWave() {
     stateRef.current.pendingReward = false;
+  }
+
+  function pickUpgrade(u: ArenaUpgrade) {
+    setRunUpgrades((prev) => [...prev, u]);
+    setUpgradeChoices(null);
+    // small heal on pick (Brotato-style breather)
+    const p = stateRef.current.player;
+    p.hp = Math.min(p.maxHp, p.hp + 10);
+    stateRef.current.pendingReward = false;
+  }
+
+  function rerollChoices() {
+    setUpgradeChoices(rollArenaUpgrades(stateRef.current.wave * 2));
   }
 
   function draw() {
@@ -568,17 +697,42 @@ export function ArenaStage() {
             </div>
           </div>
         )}
-        {st.pendingReward && inRun && (
-          <div className="absolute inset-0 grid place-items-center bg-background/85">
-            <div className="rounded-xl border bg-card p-6 text-center">
-              <div className="text-2xl">★ Wave {st.wave - 1} cleared</div>
-              <div className="mt-2 text-xs text-muted-foreground">Loot dropped to inventory.</div>
-              <button
-                onClick={nextWave}
-                className="mt-4 rounded bg-primary px-4 py-2 font-bold text-primary-foreground"
-              >
-                Next Wave →
-              </button>
+        {upgradeChoices && inRun && (
+          <div className="absolute inset-0 grid place-items-center bg-background/90 p-4">
+            <div className="w-full max-w-2xl rounded-xl border bg-card p-5 shadow-2xl">
+              <div className="mb-1 text-center text-xs uppercase tracking-widest text-muted-foreground">
+                Wave {st.wave - 1} cleared · Choose an upgrade
+              </div>
+              <div className="mb-4 text-center text-[10px] text-muted-foreground/80">
+                Loot also dropped to your stash. Picks persist for this run.
+              </div>
+              <div className="grid grid-cols-3 gap-3">
+                {upgradeChoices.map((u) => (
+                  <button
+                    key={u.id}
+                    onClick={() => pickUpgrade(u)}
+                    className={`flex h-40 flex-col rounded-lg border-2 p-3 text-left transition hover:bg-primary/10 ${rarityBorder[u.rarity]}`}
+                  >
+                    <div className="text-[10px] uppercase opacity-70">{u.rarity}</div>
+                    <div className={`mt-1 text-sm font-bold ${rarityText[u.rarity]}`}>{u.name}</div>
+                    <div className="mt-auto text-xs text-muted-foreground">{u.desc}</div>
+                  </button>
+                ))}
+              </div>
+              <div className="mt-3 flex items-center justify-between text-[11px]">
+                <button
+                  onClick={rerollChoices}
+                  className="rounded border border-border px-2 py-1 text-muted-foreground hover:text-foreground hover:bg-muted/40"
+                >
+                  ↻ Reroll
+                </button>
+                <button
+                  onClick={() => { setUpgradeChoices(null); stateRef.current.pendingReward = false; }}
+                  className="text-muted-foreground hover:text-foreground"
+                >
+                  Skip →
+                </button>
+              </div>
             </div>
           </div>
         )}
@@ -599,10 +753,28 @@ export function ArenaStage() {
           <div>RoF {loadout.fireRate.toFixed(1)}/s</div>
           <div>Range {loadout.range}</div>
           {loadout.pierce > 0 && <div>Pierce +{loadout.pierce}</div>}
+          {loadout.lifesteal > 0 && <div>LS {loadout.lifesteal}%</div>}
+          {loadout.hpRegen > 0 && <div>Regen {loadout.hpRegen.toFixed(1)}/s</div>}
+          {loadout.dmgMul !== 1 && <div>Dmg ×{loadout.dmgMul.toFixed(2)}</div>}
           <div className="rounded border border-primary/40 bg-primary/10 px-2 py-0.5 text-primary">
             ◎ {FIRE_LABEL[loadout.fireMode]}
           </div>
         </div>
+
+        {runUpgrades.length > 0 && (
+          <div className="flex flex-wrap items-center gap-1">
+            <span className="text-muted-foreground">Picks:</span>
+            {runUpgrades.map((u, i) => (
+              <span
+                key={i}
+                title={u.desc}
+                className={`rounded border px-1.5 py-0.5 text-[10px] ${rarityBorder[u.rarity]} ${rarityText[u.rarity]}`}
+              >
+                {u.name}
+              </span>
+            ))}
+          </div>
+        )}
 
         {/* Skills */}
         <div className="flex flex-wrap items-center gap-2">

@@ -140,6 +140,7 @@ function computeStats(s: Pick<State, "talentRanks" | "equipment">) {
   let crit = 5;
   let energy = 3;
   let dropBonus = 0;
+  let lifesteal = 0;
   for (const node of TALENT_TREE) {
     const r = s.talentRanks[node.id] || 0;
     atk += (node.effect.atk || 0) * r;
@@ -147,6 +148,7 @@ function computeStats(s: Pick<State, "talentRanks" | "equipment">) {
     crit += (node.effect.crit || 0) * r;
     energy += (node.effect.energy || 0) * r;
     dropBonus += (node.effect.dropBonus || 0) * r;
+    lifesteal += (node.effect.lifesteal || 0) * r;
   }
   for (const it of Object.values(s.equipment)) {
     if (!it) continue;
@@ -155,9 +157,10 @@ function computeStats(s: Pick<State, "talentRanks" | "equipment">) {
       hp += a.hp || 0;
       crit += a.crit || 0;
       dropBonus += a.dropBonus || 0;
+      lifesteal += a.lifesteal || 0;
     }
   }
-  return { atk, maxHp: hp, crit, energy, dropBonus };
+  return { atk, maxHp: hp, crit, energy, dropBonus, lifesteal };
 }
 
 export const useGame = create<State>()((set, get) => {
