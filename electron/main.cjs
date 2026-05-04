@@ -64,6 +64,18 @@ function createWindow() {
     }
   });
 
+  // Intercept popups from any <webview> inside the app and force them to load
+  // in the same webview instead of spawning a new Electron window. This keeps
+  // the global pause logic applied to video playback.
+  mainWindow.webContents.on("did-attach-webview", (_e, wc) => {
+    try {
+      wc.setWindowOpenHandler(({ url }) => {
+        try { wc.loadURL(url); } catch {}
+        return { action: "deny" };
+      });
+    } catch {}
+  });
+
   if (isDev) {
     console.log("[codequest] Loading dev URL:", process.env.CODEQUEST_DEV_URL);
     mainWindow.loadURL(process.env.CODEQUEST_DEV_URL);
