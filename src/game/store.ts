@@ -167,6 +167,14 @@ type State = {
 
   tick: () => void;
   winWave: () => void;
+
+  // Path / non-combat node actions
+  advancePath: () => void;
+  chooseEventOption: (idx: number) => void;
+  doRest: (mode: "heal" | "upgrade") => void;
+  closeShop: () => void;
+  shopBuyCard: (c: Card) => void;
+  shopRemoveCard: (cardId: string) => void;
 };
 
 // Derived helper (call with current state). Game is paused if ANY started CLI is not streaming.
