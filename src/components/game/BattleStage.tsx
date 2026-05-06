@@ -68,6 +68,7 @@ function HandCard({ c, idx, disabled, onClick }: { c: Card; idx: number; disable
       </div>
       <div className="mt-2 text-sm font-bold text-foreground">{c.name}</div>
       <div className="mt-auto text-[10px] leading-snug text-foreground/80">{c.desc}</div>
+      {c.exhaust && <div className="mt-1 text-[10px] font-bold text-amber-300">⌧ Exhaust</div>}
     </motion.button>
   );
 }
