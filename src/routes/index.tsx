@@ -29,8 +29,14 @@ function Index() {
   const [stageMax, setStageMax] = useState(false);
   const { debugMode, setDebugMode } = useGame();
 
-  const stage =
+  const stageInner =
     mode === "cards" ? <BattleStage /> : mode === "arena" ? <ArenaStage /> : <BrowserStage />;
+  const stage = mode === "cards" ? (
+    <div className="flex h-full min-h-0 flex-col gap-2">
+      <PathBar />
+      <div className="min-h-0 flex-1">{stageInner}</div>
+    </div>
+  ) : stageInner;
 
   return (
     <div className="flex h-screen w-screen flex-col gap-3 overflow-hidden p-3">
