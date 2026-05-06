@@ -79,6 +79,10 @@ type State = {
   comboTimer: number;
   pendingPrompt: string;
 
+  // Debug mode: ignore CLI idle state, game never pauses
+  debugMode: boolean;
+  setDebugMode: (b: boolean) => void;
+
   // Multi-CLI: tabs the user can switch between
   sessions: CliSession[];
   activeSessionId: string | null;
@@ -155,7 +159,8 @@ type State = {
 };
 
 // Derived helper (call with current state). Game is paused if ANY started CLI is not streaming.
-export function isAnyCliIdle(s: Pick<State, "sessions">): boolean {
+export function isAnyCliIdle(s: Pick<State, "sessions">, debugMode?: boolean): boolean {
+  if (debugMode) return false; // debug mode ignores idle check
   const started = s.sessions.filter((x) => x.hasStarted);
   if (started.length === 0) return true; // no CLI at all → paused
   return started.some((x) => x.status !== "STREAMING");
@@ -223,6 +228,9 @@ export const useGame = create<State>()((set, get) => {
 
     sessions: [{ id: "cli_1", label: "CLI 1", status: "IDLE_WAITING", hasStarted: false, lastActivityTs: 0 }],
     activeSessionId: "cli_1",
+
+    debugMode: false,
+    setDebugMode: (b: boolean) => set({ debugMode: b }),
 
     mythicLevel: 1,
     mythicAffixes: [],

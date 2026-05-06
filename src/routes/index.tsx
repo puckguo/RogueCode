@@ -5,6 +5,7 @@ import { BattleStage } from "@/components/game/BattleStage";
 import { ArenaStage } from "@/components/game/ArenaStage";
 import { BrowserStage } from "@/components/game/BrowserStage";
 import { SidePanel } from "@/components/game/SidePanel";
+import { useGame } from "@/game/store";
 
 export const Route = createFileRoute("/")({
   component: Index,
@@ -22,6 +23,7 @@ export const Route = createFileRoute("/")({
 
 function Index() {
   const [mode, setMode] = useState<"cards" | "arena" | "browser">("cards");
+  const { debugMode, setDebugMode } = useGame();
   return (
     <div className="flex h-screen w-screen flex-col gap-3 overflow-hidden p-3">
       <header className="flex items-center justify-between px-2">
@@ -54,8 +56,17 @@ function Index() {
               🌐 Browser
             </button>
           </div>
-          <div className="text-right text-[10px] text-muted-foreground">
-            v0.2 · Electron build adds real PTY
+          <div className="flex items-center gap-2">
+            <div className="text-right text-[10px] text-muted-foreground">
+              v0.2 · Electron build adds real PTY
+            </div>
+            <button
+              onClick={() => setDebugMode(!debugMode)}
+              className={`rounded px-2 py-1 text-xs font-bold transition-colors ${debugMode ? "bg-orange-600 text-white" : "bg-muted text-muted-foreground hover:bg-muted/80"}`}
+              title="Debug mode: game runs without waiting for CLI"
+            >
+              🛠 Debug {debugMode ? "ON" : "OFF"}
+            </button>
           </div>
         </div>
       </header>
@@ -64,12 +75,14 @@ function Index() {
         <div className="col-span-4 flex min-h-0 flex-col">
           <CliTerminal />
         </div>
-        <div className="col-span-5 flex min-h-0 flex-col">
+        <div className={`flex min-h-0 flex-col ${mode === "browser" ? "col-span-8" : "col-span-5"}`}>
           {mode === "cards" ? <BattleStage /> : mode === "arena" ? <ArenaStage /> : <BrowserStage />}
         </div>
-        <div className="col-span-3 flex min-h-0 flex-col">
-          <SidePanel />
-        </div>
+        {mode !== "browser" && (
+          <div className="col-span-3 flex min-h-0 flex-col">
+            <SidePanel />
+          </div>
+        )}
       </div>
     </div>
   );

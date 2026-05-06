@@ -37,7 +37,7 @@ const RESUME_JS = `
 `;
 
 export function BrowserStage() {
-  const idle = useGame((s) => isAnyCliIdle({ sessions: s.sessions }));
+  const idle = useGame((s) => isAnyCliIdle({ sessions: s.sessions }, s.debugMode));
   const [url, setUrl] = useState("https://www.bilibili.com");
   const [input, setInput] = useState(url);
   const [loading, setLoading] = useState(false);

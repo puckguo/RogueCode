@@ -73,8 +73,8 @@ function HandCard({ c, idx, disabled, onClick }: { c: Card; idx: number; disable
 }
 
 export function BattleStage() {
-  const { enemies, hand, player, buffs, turn, wave, combo, playCard, endTurn, cliStatus, log, inRun } = useGame();
-  const paused = cliStatus !== "STREAMING";
+  const { enemies, hand, player, buffs, turn, wave, combo, playCard, endTurn, cliStatus, log, inRun, debugMode } = useGame();
+  const paused = !debugMode && cliStatus !== "STREAMING";
 
   return (
     <div className="relative flex h-full flex-col rounded-lg border bg-card overflow-hidden">

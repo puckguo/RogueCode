@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { isAnyCliIdle, useGame } from "@/game/store";
 import { rollItem } from "@/game/arena";
-import { rollArenaUpgrades, mythicScale } from "@/game/data";
+import { rollArenaUpgrades, mythicScale, TALENT_TREE } from "@/game/data";
 import type { ArenaUpgrade, FireMode, Item, MythicAffix, Rarity, SkillKind } from "@/game/types";
 
 type Vec = { x: number; y: number };
@@ -78,8 +78,6 @@ function deriveLoadout(
   // (We import TALENT_TREE only to read effects — but to avoid a circular import here,
   // we do a tiny inline walk via a list of known effect keys.)
   // Simpler: re-import.
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const { TALENT_TREE } = require("@/game/data") as typeof import("@/game/data");
   for (const node of TALENT_TREE) {
     const r = talentRanks[node.id] || 0;
     if (!r) continue;
@@ -172,9 +170,10 @@ export function ArenaStage() {
     sessions,
     mythicLevel,
     mythicAffixes,
+    debugMode,
   } = useGame() as any;
 
-  const anyIdle = isAnyCliIdle({ sessions });
+  const anyIdle = isAnyCliIdle({ sessions }, debugMode);
   const mScale = useMemo(() => mythicScale(mythicLevel), [mythicLevel]);
   const mythicIds = useMemo(
     () => new Set((mythicAffixes as MythicAffix[]).map((a) => a.id)),
@@ -236,8 +235,6 @@ export function ArenaStage() {
         crit += a.crit || 0;
       }
     }
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { TALENT_TREE } = require("@/game/data") as typeof import("@/game/data");
     for (const node of TALENT_TREE) {
       const r = (talentRanks as Record<string, number>)[node.id] || 0;
       if (!r) continue;
