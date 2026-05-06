@@ -1,7 +1,42 @@
 import { useState, type ReactNode } from "react";
 import { useGame } from "@/game/store";
+import type { Item, Rarity, TalentNode } from "@/game/types";
+import { TALENT_TREE } from "@/game/data";
+import { motion, AnimatePresence } from "framer-motion";
 
 export function Section({
+  title,
+  right,
+  defaultOpen = true,
+  children,
+  className = "",
+  bodyClassName = "",
+}: {
+  title: ReactNode;
+  right?: ReactNode;
+  defaultOpen?: boolean;
+  children: ReactNode;
+  className?: string;
+  bodyClassName?: string;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <div className={`rounded-lg border bg-card ${className}`}>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="flex w-full items-center justify-between gap-2 px-3 py-2 text-xs font-bold uppercase tracking-wider text-muted-foreground hover:text-foreground"
+      >
+        <span className="flex items-center gap-1.5">
+          <span className={`inline-block transition-transform ${open ? "rotate-90" : ""}`}>▶</span>
+          {title}
+        </span>
+        {right && <span onClick={(e) => e.stopPropagation()}>{right}</span>}
+      </button>
+      {open && <div className={`border-t px-3 py-2 ${bodyClassName}`}>{children}</div>}
+    </div>
+  );
+}
   title,
   right,
   defaultOpen = true,
