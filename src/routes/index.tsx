@@ -4,7 +4,8 @@ import { CliTerminal } from "@/components/game/CliTerminal";
 import { BattleStage } from "@/components/game/BattleStage";
 import { ArenaStage } from "@/components/game/ArenaStage";
 import { BrowserStage } from "@/components/game/BrowserStage";
-import { SidePanel } from "@/components/game/SidePanel";
+import { ArenaSidePanel } from "@/components/game/sidepanel/ArenaSidePanel";
+import { CardsSidePanel } from "@/components/game/sidepanel/CardsSidePanel";
 import { useGame } from "@/game/store";
 
 export const Route = createFileRoute("/")({
@@ -80,7 +81,7 @@ function Index() {
         </div>
         {mode !== "browser" && (
           <div className="col-span-3 flex min-h-0 flex-col">
-            <SidePanel />
+            {mode === "cards" ? <CardsSidePanel /> : <ArenaSidePanel />}
           </div>
         )}
       </div>
