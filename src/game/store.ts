@@ -588,7 +588,7 @@ export const useGame = create<State>()((set, get) => {
 
     endTurn: () => {
       const s = get();
-      if (!s.inRun) return;
+      if (!s.inRun || !s.inCombat) return;
       let player = { ...s.player };
       const log = [...s.log];
       for (const e of s.enemies) {
