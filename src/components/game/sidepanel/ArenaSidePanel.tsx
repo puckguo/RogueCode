@@ -114,9 +114,7 @@ export function ArenaSidePanel() {
         ))}
       </Section>
 
-      <Section title="Talent Tree" defaultOpen={false} bodyClassName="p-0">
-        <div className="p-2"><TalentsSection /></div>
-      </Section>
+      <TalentsSection />
 
       <RewardModals />
       <RunSummaryModal />
