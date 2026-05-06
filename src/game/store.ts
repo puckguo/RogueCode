@@ -737,36 +737,213 @@ export const useGame = create<State>()((set, get) => {
       const s = get() as any;
       const stats = computeStats(s);
       const magicFind = stats.dropBonus + s.combo * 2;
-      const log = [...s.log, `★ Wave ${s.wave} cleared!`];
-      const isBoss = s.wave % 5 === 0;
+      const node = s.path[s.pathIdx] as PathNode | undefined;
+      const isBoss = node?.type === "boss";
+      const isElite = node?.type === "elite";
+      const log = [...s.log, `★ ${node?.type === "boss" ? "Boss" : node?.type === "elite" ? "Elite" : "Wave"} ${s.wave} cleared!`];
       const choices = shuffle(REWARD_POOL).slice(0, 3);
       let itemReward: Item | null = null;
       let consumedLegendary = false;
-      if (s.wave % 3 === 0 || s.nextDropLegendary) {
-        const force: Rarity | undefined = s.nextDropLegendary ? "legendary" : undefined;
+      if (isBoss || isElite || s.nextDropLegendary) {
+        const force: Rarity | undefined = s.nextDropLegendary ? "legendary" : isBoss ? "rare" : undefined;
         itemReward = rollItem(s.wave, magicFind, force);
         if (s.nextDropLegendary) consumedLegendary = true;
       }
       if (consumedLegendary) log.push("⚡ Legendary drop triggered by your commit!");
-      const next = s.wave + 1;
-      const enemies: Enemy[] = [rollEnemy(next)];
-      if (next % 4 === 0) enemies.push(rollEnemy(next));
+
+      // End combat: hand + discard + exhaust all return to master deck (StS-style).
+      const path = s.path.map((n: PathNode, i: number) => i === s.pathIdx ? { ...n, cleared: true } : n);
+
       set({
-        wave: next,
-        enemies,
         rewardChoices: choices,
         itemReward,
-        log,
+        log: log.slice(-30),
         nextDropLegendary: consumedLegendary ? false : s.nextDropLegendary,
-        player: { ...s.player, hp: Math.min(s.player.maxHp, s.player.hp + 4), block: 0, energy: s.player.maxEnergy },
+        inCombat: false,
+        enemies: [],
         hand: [],
+        draw: [],
+        discard: [],
+        exhaust: [],
+        buffs: { atk: 0, crit: 0, turns: 0 },
+        path,
       });
-      get().endTurn();
+
       if (isBoss) {
         const newShards = s.shards + 20;
         set({ shards: newShards });
         persist({ shards: newShards, talentRanks: s.talentRanks, totalPoints: s.totalPoints, stash: s.stash });
       }
+    },
+
+    advancePath: () => {
+      const s = get();
+      if (!s.inRun) return;
+      const nextIdx = s.pathIdx + 1;
+      if (nextIdx >= s.path.length) {
+        // Run complete!
+        set({ log: [...s.log, "🏆 You conquered the path!"] });
+        get().endRun();
+        return;
+      }
+      const node = s.path[nextIdx];
+      const baseSet: Partial<State> = { pathIdx: nextIdx, wave: node.wave };
+
+      if (node.type === "enemy" || node.type === "elite" || node.type === "boss") {
+        const enemies: Enemy[] =
+          node.type === "boss"
+            ? [rollEnemy(node.wave * 5)] // boss-tier scaling via mod-5 trick in rollEnemy
+            : node.type === "elite"
+              ? [rollEnemy(node.wave * 3)]
+              : [rollEnemy(node.wave)];
+        if (node.type === "enemy" && node.wave % 4 === 0) enemies.push(rollEnemy(node.wave));
+        // Begin combat: shuffle deck into draw, reset buffs/block, deal opening hand.
+        const draw = shuffle([...s.deck]);
+        const hand: Card[] = [];
+        const drawArr = [...draw];
+        for (let i = 0; i < 5 && drawArr.length > 0; i++) hand.push(drawArr.shift()!);
+        set({
+          ...baseSet,
+          inCombat: true,
+          enemies,
+          draw: drawArr,
+          discard: [],
+          exhaust: [],
+          hand,
+          turn: 1,
+          buffs: { atk: 0, crit: 0, turns: 0 },
+          player: { ...s.player, energy: s.player.maxEnergy, block: 0 },
+          log: [...s.log, `⚔ ${node.type === "boss" ? "BOSS" : node.type === "elite" ? "Elite" : "Combat"} — Wave ${node.wave}`],
+        } as any);
+        return;
+      }
+
+      if (node.type === "rest") {
+        set({ ...baseSet, pendingRest: true, log: [...s.log, `🔥 Rest site at wave ${node.wave}`] } as any);
+        return;
+      }
+
+      if (node.type === "shop") {
+        const cards = shuffle(REWARD_POOL).slice(0, 4);
+        set({ ...baseSet, pendingShop: { cards, removeCost: 15 }, log: [...s.log, `🛒 Shop at wave ${node.wave}`] } as any);
+        return;
+      }
+
+      // event
+      const events = [
+        {
+          title: "Mysterious Console",
+          desc: "An old terminal blinks in the dark. You can offer some HP for ether shards.",
+          choices: [
+            { label: "Sacrifice 8 HP → +12 ⟡", effect: () => {
+              const ss = get();
+              const newHp = Math.max(1, ss.player.hp - 8);
+              const newSh = ss.shards + 12;
+              set({ player: { ...ss.player, hp: newHp }, shards: newSh });
+              persist({ shards: newSh, talentRanks: ss.talentRanks, totalPoints: ss.totalPoints, stash: ss.stash });
+            }},
+            { label: "Leave", effect: () => {} },
+          ],
+        },
+        {
+          title: "Refactor Shrine",
+          desc: "A shrine asks you to remove a card from your deck.",
+          choices: [
+            { label: "Remove a Strike", effect: () => {
+              const ss = get();
+              const idx = ss.deck.findIndex((c) => c.id.startsWith("strike"));
+              if (idx >= 0) {
+                const newDeck = ss.deck.filter((_, i) => i !== idx);
+                set({ deck: newDeck, log: [...ss.log, "✦ A Strike was removed from your deck."] });
+              }
+            }},
+            { label: "Leave", effect: () => {} },
+          ],
+        },
+        {
+          title: "Whispering Cache",
+          desc: "A cache offers a random reward — or a curse.",
+          choices: [
+            { label: "Open it (50/50: +20 ⟡ or -10 HP)", effect: () => {
+              const ss = get();
+              if (Math.random() < 0.5) {
+                const newSh = ss.shards + 20;
+                set({ shards: newSh, log: [...ss.log, "✨ +20 ⟡!"] });
+                persist({ shards: newSh, talentRanks: ss.talentRanks, totalPoints: ss.totalPoints, stash: ss.stash });
+              } else {
+                const newHp = Math.max(1, ss.player.hp - 10);
+                set({ player: { ...ss.player, hp: newHp }, log: [...ss.log, "💀 Cursed! -10 HP"] });
+              }
+            }},
+            { label: "Leave", effect: () => {} },
+          ],
+        },
+      ];
+      const ev = events[Math.floor(Math.random() * events.length)];
+      set({ ...baseSet, pendingEvent: ev, log: [...s.log, `❓ Event: ${ev.title}`] } as any);
+    },
+
+    chooseEventOption: (idx: number) => {
+      const s = get();
+      const ev = s.pendingEvent;
+      if (!ev) return;
+      ev.choices[idx]?.effect();
+      set({ pendingEvent: null });
+      get().advancePath();
+    },
+
+    doRest: (mode: "heal" | "upgrade") => {
+      const s = get();
+      if (!s.pendingRest) return;
+      if (mode === "heal") {
+        const heal = Math.floor(s.player.maxHp * 0.3);
+        set({
+          player: { ...s.player, hp: Math.min(s.player.maxHp, s.player.hp + heal) },
+          pendingRest: false,
+          log: [...s.log, `🔥 Rested. +${heal} HP.`],
+        });
+      } else {
+        // "Upgrade": gain a free reward card (one of 3)
+        const choices = shuffle(REWARD_POOL).slice(0, 3);
+        set({ pendingRest: false, rewardChoices: choices, log: [...s.log, "✦ Smith — pick a free card."] });
+        return;
+      }
+      get().advancePath();
+    },
+
+    closeShop: () => {
+      set({ pendingShop: null });
+      get().advancePath();
+    },
+
+    shopBuyCard: (c: Card) => {
+      const s = get();
+      const cost = 12;
+      if (!s.pendingShop || s.shards < cost) return;
+      const newSh = s.shards - cost;
+      const newCards = s.pendingShop.cards.filter((x) => x !== c);
+      set({
+        shards: newSh,
+        deck: [...s.deck, c],
+        pendingShop: { ...s.pendingShop, cards: newCards },
+        log: [...s.log, `🛒 Bought ${c.name} for ${cost} ⟡.`],
+      });
+      persist({ shards: newSh, talentRanks: s.talentRanks, totalPoints: s.totalPoints, stash: s.stash });
+    },
+
+    shopRemoveCard: (cardId: string) => {
+      const s = get();
+      if (!s.pendingShop || s.shards < s.pendingShop.removeCost) return;
+      const idx = s.deck.findIndex((c) => c.id === cardId);
+      if (idx < 0) return;
+      const newSh = s.shards - s.pendingShop.removeCost;
+      const newDeck = s.deck.filter((_, i) => i !== idx);
+      set({
+        shards: newSh,
+        deck: newDeck,
+        log: [...s.log, `🗑 Removed a card for ${s.pendingShop.removeCost} ⟡.`],
+      });
+      persist({ shards: newSh, talentRanks: s.talentRanks, totalPoints: s.totalPoints, stash: s.stash });
     },
   } as any;
 });
