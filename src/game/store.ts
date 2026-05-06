@@ -523,11 +523,14 @@ export const useGame = create<State>()((set, get) => {
       }
 
       const newHand = s.hand.filter((_, i) => i !== idx);
+      const healed = Math.round(healFromLifesteal);
+      const newHp = Math.min(s.player.maxHp, s.player.hp + healed);
+      if (healed > 0) log.push(`→ Lifesteal restored ${healed} HP.`);
       set({
         hand: newHand,
         discard: [...s.discard, card],
         enemies,
-        player: { ...s.player, energy: s.player.energy - card.cost, block },
+        player: { ...s.player, hp: newHp, energy: s.player.energy - card.cost, block },
         buffs,
         log: log.slice(-30),
       });
