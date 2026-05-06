@@ -10,7 +10,9 @@ import {
   rollRarity,
   RARITY_AFFIX_COUNT,
   rollMythicAffixes,
+  generateRunPath,
 } from "./data";
+import type { PathNode } from "./types";
 import { writeSaveMd, readSaveMd, writeSkillMd, writeStateMd, appendLogMd } from "./mdStorage";
 
 const STORAGE_KEY = "codequest_save_v1";
