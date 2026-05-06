@@ -52,7 +52,7 @@ export function CardsSidePanel() {
 
       {inRun && (
         <Section title="Piles" defaultOpen={true}>
-          <div className="grid grid-cols-3 gap-2 text-center text-xs">
+          <div className="grid grid-cols-4 gap-2 text-center text-xs">
             <div>
               <div className="text-[10px] uppercase text-muted-foreground">Draw</div>
               <div className="text-lg font-bold">{draw.length}</div>
@@ -64,6 +64,10 @@ export function CardsSidePanel() {
             <div>
               <div className="text-[10px] uppercase text-muted-foreground">Discard</div>
               <div className="text-lg font-bold">{discard.length}</div>
+            </div>
+            <div>
+              <div className="text-[10px] uppercase text-muted-foreground">Exhaust</div>
+              <div className="text-lg font-bold text-amber-300">{exhaust.length}</div>
             </div>
           </div>
         </Section>
