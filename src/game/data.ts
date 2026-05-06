@@ -87,7 +87,38 @@ export const REWARD_POOL: Card[] = [
   { id: "execute", name: "Execute", kind: "attack", cost: 2, desc: "Deal 18 damage.", damage: 18 },
   { id: "barrier", name: "Barrier", kind: "defense", cost: 1, desc: "Gain 8 Block.", block: 8 },
   { id: "spark", name: "Spark", kind: "spell", cost: 0, desc: "Deal 3 damage.", damage: 3 },
+  // Exhaust cards (StS-style — once per combat, return to deck on combat end)
+  { id: "apotheosis", name: "Apotheosis", kind: "buff", cost: 2, desc: "+8 ATK for 5 turns. Exhaust.", buff: { atk: 8, turns: 5 }, exhaust: true },
+  { id: "secondwind", name: "Second Wind", kind: "defense", cost: 1, desc: "Heal 12 HP. Exhaust.", heal: 12, exhaust: true },
+  { id: "bombard", name: "Bombard", kind: "spell", cost: 2, desc: "Deal 28 damage. Exhaust.", damage: 28, exhaust: true },
+  { id: "purity", name: "Purity", kind: "buff", cost: 0, desc: "+4 ATK, +20% Crit (3 turns). Exhaust.", buff: { atk: 4, crit: 20, turns: 3 }, exhaust: true },
 ];
+
+// =====================================================================
+// Run path generation (Slay-the-Spire style linear path with node types)
+// =====================================================================
+import type { PathNode } from "./types";
+
+export function generateRunPath(length = 15): PathNode[] {
+  const nodes: PathNode[] = [];
+  for (let i = 1; i <= length; i++) {
+    let type: PathNode["type"];
+    if (i === length) type = "boss";
+    else if (i % 5 === 0) type = "elite";
+    else if (i === 1) type = "enemy";
+    else {
+      // Distribute non-combat nodes; keep combats >= 55%
+      const r = Math.random();
+      if (r < 0.55) type = "enemy";
+      else if (r < 0.72) type = "event";
+      else if (r < 0.86) type = "rest";
+      else type = "shop";
+    }
+    nodes.push({ type, wave: i });
+  }
+  return nodes;
+}
+
 
 const ENEMY_NAMES = ["Bug Sprite", "Null Wraith", "Memory Leak", "Race Condition", "Off-By-One"];
 const ELITE_NAMES = ["Stack Overflow", "Heisenbug", "Deadlock Knight"];
