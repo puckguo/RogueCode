@@ -6,6 +6,8 @@ import { ArenaStage } from "@/components/game/ArenaStage";
 import { BrowserStage } from "@/components/game/BrowserStage";
 import { ArenaSidePanel } from "@/components/game/sidepanel/ArenaSidePanel";
 import { CardsSidePanel } from "@/components/game/sidepanel/CardsSidePanel";
+import { PathBar } from "@/components/game/PathBar";
+import { PathNodeModals } from "@/components/game/PathNodeModals";
 import { useGame } from "@/game/store";
 
 export const Route = createFileRoute("/")({
