@@ -23,7 +23,7 @@ function CardTile({ card }: { card: Card }) {
 }
 
 export function CardsSidePanel() {
-  const { hand, draw, discard, deck, wave, inRun, player } = useGame();
+  const { hand, draw, discard, exhaust, deck, wave, inRun, player } = useGame();
 
   return (
     <div className="flex h-full flex-col gap-2 overflow-y-auto pr-1">
