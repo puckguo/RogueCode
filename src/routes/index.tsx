@@ -24,7 +24,12 @@ export const Route = createFileRoute("/")({
 
 function Index() {
   const [mode, setMode] = useState<"cards" | "arena" | "browser">("cards");
+  const [stageMax, setStageMax] = useState(false);
   const { debugMode, setDebugMode } = useGame();
+
+  const stage =
+    mode === "cards" ? <BattleStage /> : mode === "arena" ? <ArenaStage /> : <BrowserStage />;
+
   return (
     <div className="flex h-screen w-screen flex-col gap-3 overflow-hidden p-3">
       <header className="flex items-center justify-between px-2">
@@ -57,6 +62,13 @@ function Index() {
               🌐 Browser
             </button>
           </div>
+          <button
+            onClick={() => setStageMax((v) => !v)}
+            className="rounded border bg-card px-2 py-1 text-xs font-bold text-muted-foreground hover:text-primary"
+            title="Maximize game stage"
+          >
+            {stageMax ? "🗗 Restore" : "⛶ Maximize"}
+          </button>
           <div className="flex items-center gap-2">
             <div className="text-right text-[10px] text-muted-foreground">
               v0.2 · Electron build adds real PTY
@@ -72,19 +84,23 @@ function Index() {
         </div>
       </header>
 
-      <div className="grid min-h-0 flex-1 grid-cols-12 gap-3">
-        <div className="col-span-4 flex min-h-0 flex-col">
-          <CliTerminal />
-        </div>
-        <div className={`flex min-h-0 flex-col ${mode === "browser" ? "col-span-8" : "col-span-5"}`}>
-          {mode === "cards" ? <BattleStage /> : mode === "arena" ? <ArenaStage /> : <BrowserStage />}
-        </div>
-        {mode !== "browser" && (
-          <div className="col-span-3 flex min-h-0 flex-col">
-            {mode === "cards" ? <CardsSidePanel /> : <ArenaSidePanel />}
+      {stageMax ? (
+        <div className="min-h-0 flex-1">{stage}</div>
+      ) : (
+        <div className="grid min-h-0 flex-1 grid-cols-12 gap-3">
+          <div className="col-span-4 flex min-h-0 flex-col">
+            <CliTerminal />
           </div>
-        )}
-      </div>
+          <div className={`flex min-h-0 flex-col ${mode === "browser" ? "col-span-8" : "col-span-5"}`}>
+            {stage}
+          </div>
+          {mode !== "browser" && (
+            <div className="col-span-3 flex min-h-0 flex-col">
+              {mode === "cards" ? <CardsSidePanel /> : <ArenaSidePanel />}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
