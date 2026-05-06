@@ -40,6 +40,7 @@ function Index() {
 
   return (
     <div className="flex h-screen w-screen flex-col gap-3 overflow-hidden p-3">
+      <PathNodeModals />
       <header className="flex items-center justify-between px-2">
         <div>
           <h1 className="text-xl font-bold tracking-tight">
