@@ -1,6 +1,6 @@
 import { useGame } from "@/game/store";
 import type { Card } from "@/game/types";
-import { StatusStrip, TalentsSection, RewardModals, RunSummaryModal } from "./shared";
+import { StatusStrip, TalentsSection, RewardModals, RunSummaryModal, Section } from "./shared";
 
 const kindColor: Record<Card["kind"], string> = {
   attack: "border-rose-500/50 text-rose-300",
@@ -26,12 +26,10 @@ export function CardsSidePanel() {
   const { hand, draw, discard, deck, wave, inRun, player } = useGame();
 
   return (
-    <div className="flex h-full flex-col gap-3 overflow-hidden">
+    <div className="flex h-full flex-col gap-2 overflow-y-auto pr-1">
       <StatusStrip />
 
-      {/* Run progress */}
-      <div className="rounded-lg border bg-card p-3">
-        <div className="mb-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">Run Progress</div>
+      <Section title="Run Progress" defaultOpen={true}>
         <div className="grid grid-cols-3 gap-2 text-center text-xs">
           <div>
             <div className="text-[10px] uppercase text-muted-foreground">Wave</div>
@@ -50,48 +48,42 @@ export function CardsSidePanel() {
             </div>
           </div>
         </div>
-      </div>
+      </Section>
 
-      <div className="flex flex-1 flex-col gap-3 overflow-hidden">
-        {/* In-run pile counts */}
-        {inRun && (
-          <div className="rounded-lg border bg-card p-3">
-            <div className="mb-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">Piles</div>
-            <div className="grid grid-cols-3 gap-2 text-center text-xs">
-              <div>
-                <div className="text-[10px] uppercase text-muted-foreground">Draw</div>
-                <div className="text-lg font-bold">{draw.length}</div>
-              </div>
-              <div>
-                <div className="text-[10px] uppercase text-muted-foreground">Hand</div>
-                <div className="text-lg font-bold text-primary">{hand.length}</div>
-              </div>
-              <div>
-                <div className="text-[10px] uppercase text-muted-foreground">Discard</div>
-                <div className="text-lg font-bold">{discard.length}</div>
-              </div>
+      {inRun && (
+        <Section title="Piles" defaultOpen={true}>
+          <div className="grid grid-cols-3 gap-2 text-center text-xs">
+            <div>
+              <div className="text-[10px] uppercase text-muted-foreground">Draw</div>
+              <div className="text-lg font-bold">{draw.length}</div>
+            </div>
+            <div>
+              <div className="text-[10px] uppercase text-muted-foreground">Hand</div>
+              <div className="text-lg font-bold text-primary">{hand.length}</div>
+            </div>
+            <div>
+              <div className="text-[10px] uppercase text-muted-foreground">Discard</div>
+              <div className="text-lg font-bold">{discard.length}</div>
             </div>
           </div>
+        </Section>
+      )}
+
+      <Section
+        title={`Deck (${deck.length})`}
+        defaultOpen={false}
+        right={<span className="text-[10px] font-normal opacity-70">your master deck</span>}
+        bodyClassName="max-h-80 overflow-y-auto space-y-1"
+      >
+        {deck.length === 0 && (
+          <div className="px-2 py-4 text-center text-xs text-muted-foreground">Empty deck.</div>
         )}
+        {deck.map((c) => (
+          <CardTile key={c.id} card={c} />
+        ))}
+      </Section>
 
-        {/* Deck list */}
-        <div className="flex-1 overflow-hidden rounded-lg border bg-card">
-          <div className="flex items-center justify-between border-b px-3 py-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">
-            <span>Deck ({deck.length})</span>
-            <span className="text-[10px] font-normal opacity-70">your master deck</span>
-          </div>
-          <div className="max-h-full space-y-1 overflow-y-auto p-2">
-            {deck.length === 0 && (
-              <div className="px-2 py-4 text-center text-xs text-muted-foreground">Empty deck.</div>
-            )}
-            {deck.map((c) => (
-              <CardTile key={c.id} card={c} />
-            ))}
-          </div>
-        </div>
-
-        <TalentsSection />
-      </div>
+      <TalentsSection />
 
       <RewardModals />
       <RunSummaryModal />
