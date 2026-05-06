@@ -638,7 +638,6 @@ export const useGame = create<State>()((set, get) => {
     pickReward: (c: Card | null) => {
       const s = get();
       if (c) {
-        // Combat is over: card goes to master deck only (will be reshuffled at next combat).
         set({
           deck: [...s.deck, c],
           rewardChoices: null,
@@ -647,14 +646,16 @@ export const useGame = create<State>()((set, get) => {
       } else {
         set({ rewardChoices: null });
       }
-      // After picking (or skipping), advance to next path node.
-      get().advancePath();
+      const ns = get();
+      if (!ns.rewardChoices && !ns.itemReward) get().advancePath();
     },
 
     takeItemReward: () => {
       const s = get();
       if (!s.itemReward) return;
       set({ inventory: [...s.inventory, s.itemReward], itemReward: null, log: [...s.log, `+ Looted ${s.itemReward.name}.`] });
+      const ns = get();
+      if (!ns.rewardChoices && !ns.itemReward) get().advancePath();
     },
 
     equipItem: (id: string) => {
