@@ -100,11 +100,20 @@ type State = {
   hand: Card[];
   draw: Card[];
   discard: Card[];
+  exhaust: Card[];           // StS: cards exhausted this combat (return to deck on combat end)
   deck: Card[];
   rewardChoices: Card[] | null;
   itemReward: Item | null;
   log: string[];
   turn: number;
+
+  // Run path (StS-style)
+  path: PathNode[];
+  pathIdx: number;            // index into path of current node
+  inCombat: boolean;          // true while resolving an enemy/elite/boss node
+  pendingEvent: null | { title: string; desc: string; choices: { label: string; effect: () => void }[] };
+  pendingRest: boolean;
+  pendingShop: null | { cards: Card[]; removeCost: number };
 
   // Meta
   shards: number;
