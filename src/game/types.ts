@@ -85,6 +85,16 @@ export type Card = {
   block?: number;
   hits?: number;
   buff?: { atk?: number; crit?: number; turns: number };
+  exhaust?: boolean;            // StS-style: removed from combat after play; returns to deck next combat
+  heal?: number;                // self-heal on play (used by some exhaust cards)
+};
+
+// Slay-the-Spire style path node.
+export type PathNodeType = "enemy" | "elite" | "boss" | "event" | "rest" | "shop";
+export type PathNode = {
+  type: PathNodeType;
+  wave: number;     // 1-indexed position in the run
+  cleared?: boolean;
 };
 
 export type Enemy = {

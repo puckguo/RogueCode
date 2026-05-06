@@ -6,6 +6,8 @@ import { ArenaStage } from "@/components/game/ArenaStage";
 import { BrowserStage } from "@/components/game/BrowserStage";
 import { ArenaSidePanel } from "@/components/game/sidepanel/ArenaSidePanel";
 import { CardsSidePanel } from "@/components/game/sidepanel/CardsSidePanel";
+import { PathBar } from "@/components/game/PathBar";
+import { PathNodeModals } from "@/components/game/PathNodeModals";
 import { useGame } from "@/game/store";
 
 export const Route = createFileRoute("/")({
@@ -27,11 +29,18 @@ function Index() {
   const [stageMax, setStageMax] = useState(false);
   const { debugMode, setDebugMode } = useGame();
 
-  const stage =
+  const stageInner =
     mode === "cards" ? <BattleStage /> : mode === "arena" ? <ArenaStage /> : <BrowserStage />;
+  const stage = mode === "cards" ? (
+    <div className="flex h-full min-h-0 flex-col gap-2">
+      <PathBar />
+      <div className="min-h-0 flex-1">{stageInner}</div>
+    </div>
+  ) : stageInner;
 
   return (
     <div className="flex h-screen w-screen flex-col gap-3 overflow-hidden p-3">
+      <PathNodeModals />
       <header className="flex items-center justify-between px-2">
         <div>
           <h1 className="text-xl font-bold tracking-tight">
