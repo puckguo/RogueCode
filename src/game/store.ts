@@ -408,10 +408,10 @@ export const useGame = create<State>()((set, get) => {
 
     startRun: () => {
       const stats = computeStats(get());
-      const deck = shuffle([...STARTER_DECK]);
+      const path = generateRunPath(15);
       set({
         inRun: true,
-        wave: 1,
+        wave: 0,
         player: {
           hp: stats.maxHp,
           maxHp: stats.maxHp,
@@ -422,17 +422,24 @@ export const useGame = create<State>()((set, get) => {
           block: 0,
         },
         buffs: { atk: 0, crit: 0, turns: 0 },
-        enemies: [rollEnemy(1)],
-        deck,
-        draw: deck,
+        enemies: [],
+        deck: [...STARTER_DECK],
+        draw: [],
         discard: [],
+        exhaust: [],
         hand: [],
         log: ["⚔ Run started. Focus your AI to advance."],
         turn: 0,
         rewardChoices: null,
         itemReward: null,
+        path,
+        pathIdx: -1,
+        inCombat: false,
+        pendingEvent: null,
+        pendingRest: false,
+        pendingShop: null,
       });
-      get().endTurn();
+      get().advancePath();
     },
 
     endRun: () => {
