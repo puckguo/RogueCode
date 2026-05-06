@@ -481,15 +481,20 @@ export const useGame = create<State>()((set, get) => {
       }
       const totalAtk = s.player.atk + s.buffs.atk;
       const critChance = s.player.crit + s.buffs.crit;
+      const stats = computeStats(s);
+      const lifestealPct = stats.lifesteal; // % of damage healed back
       let enemies = [...s.enemies];
       const log = [...s.log];
+      let healFromLifesteal = 0;
 
       const dealDamage = (target: number, baseDmg: number) => {
         const isCrit = Math.random() * 100 < critChance;
-        const dmg = Math.round((baseDmg + totalAtk * 0.3) * (isCrit ? 2 : 1));
+        // ATK fully scales card damage (was 0.3x — too weak for talent tree to matter).
+        const dmg = Math.round((baseDmg + totalAtk) * (isCrit ? 2 : 1));
         const e = enemies[target];
         if (!e) return;
         e.hp -= dmg;
+        if (lifestealPct > 0) healFromLifesteal += (dmg * lifestealPct) / 100;
         log.push(`→ ${card.name} hit ${e.name} for ${dmg}${isCrit ? " (CRIT!)" : ""}`);
       };
 
