@@ -508,6 +508,10 @@ export const useGame = create<State>()((set, get) => {
       const s = get();
       const card = s.hand[idx];
       if (!card) return;
+      if (!s.inCombat) {
+        set({ log: [...s.log, "Not in combat."] });
+        return;
+      }
       if (s.player.energy < card.cost) {
         set({ log: [...s.log, "Not enough energy."] });
         return;
@@ -515,14 +519,13 @@ export const useGame = create<State>()((set, get) => {
       const totalAtk = s.player.atk + s.buffs.atk;
       const critChance = s.player.crit + s.buffs.crit;
       const stats = computeStats(s);
-      const lifestealPct = stats.lifesteal; // % of damage healed back
+      const lifestealPct = stats.lifesteal;
       let enemies = [...s.enemies];
       const log = [...s.log];
       let healFromLifesteal = 0;
 
       const dealDamage = (target: number, baseDmg: number) => {
         const isCrit = Math.random() * 100 < critChance;
-        // ATK fully scales card damage (was 0.3x — too weak for talent tree to matter).
         const dmg = Math.round((baseDmg + totalAtk) * (isCrit ? 2 : 1));
         const e = enemies[target];
         if (!e) return;
@@ -556,12 +559,22 @@ export const useGame = create<State>()((set, get) => {
       }
 
       const newHand = s.hand.filter((_, i) => i !== idx);
-      const healed = Math.round(healFromLifesteal);
-      const newHp = Math.min(s.player.maxHp, s.player.hp + healed);
-      if (healed > 0) log.push(`→ Lifesteal restored ${healed} HP.`);
+      const healFromCard = card.heal || 0;
+      const totalHeal = Math.round(healFromLifesteal) + healFromCard;
+      const newHp = Math.min(s.player.maxHp, s.player.hp + totalHeal);
+      if (healFromCard > 0) log.push(`→ ${card.name} healed ${healFromCard} HP.`);
+      else if (totalHeal > 0) log.push(`→ Lifesteal restored ${totalHeal} HP.`);
+
+      // StS-style exhaust: card goes to exhaust pile (returns to deck on combat end)
+      const isExhaust = !!card.exhaust;
+      const newDiscard = isExhaust ? s.discard : [...s.discard, card];
+      const newExhaust = isExhaust ? [...s.exhaust, card] : s.exhaust;
+      if (isExhaust) log.push(`→ ${card.name} exhausted (back next combat).`);
+
       set({
         hand: newHand,
-        discard: [...s.discard, card],
+        discard: newDiscard,
+        exhaust: newExhaust,
         enemies,
         player: { ...s.player, hp: newHp, energy: s.player.energy - card.cost, block },
         buffs,
