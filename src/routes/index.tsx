@@ -9,6 +9,8 @@ import { CardsSidePanel } from "@/components/game/sidepanel/CardsSidePanel";
 import { PathBar } from "@/components/game/PathBar";
 import { PathNodeModals } from "@/components/game/PathNodeModals";
 import { useGame } from "@/game/store";
+import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@/components/ui/resizable";
+import { PanelLeftClose, PanelLeft, Maximize2, Minimize2 } from "lucide-react";
 
 export const Route = createFileRoute("/")({
   component: Index,
@@ -27,6 +29,8 @@ export const Route = createFileRoute("/")({
 function Index() {
   const [mode, setMode] = useState<"cards" | "arena" | "browser">("cards");
   const [stageMax, setStageMax] = useState(false);
+  type CliCollapse = false | "game" | "full";
+  const [cliCollapsed, setCliCollapsed] = useState<CliCollapse>(false);
   const { debugMode, setDebugMode } = useGame();
 
   const stageInner =
@@ -72,11 +76,20 @@ function Index() {
             </button>
           </div>
           <button
+            onClick={() => setCliCollapsed((v) => (v === false ? "game" : v === "game" ? "full" : false))}
+            className="flex items-center gap-1 rounded border bg-card px-2 py-1 text-xs font-bold text-muted-foreground hover:text-primary"
+            title={cliCollapsed === "full" ? "Expand to full" : cliCollapsed === "game" ? "Expand CLI full" : "Collapse CLI to narrow"}
+          >
+            {cliCollapsed === "full" ? <Maximize2 className="h-3 w-3" /> : cliCollapsed === "game" ? <PanelLeft className="h-3 w-3" /> : <PanelLeftClose className="h-3 w-3" />}
+            {cliCollapsed === "full" ? "Full" : cliCollapsed === "game" ? "Expand" : "Collapse"}
+          </button>
+          <button
             onClick={() => setStageMax((v) => !v)}
-            className="rounded border bg-card px-2 py-1 text-xs font-bold text-muted-foreground hover:text-primary"
+            className="flex items-center gap-1 rounded border bg-card px-2 py-1 text-xs font-bold text-muted-foreground hover:text-primary"
             title="Maximize game stage"
           >
-            {stageMax ? "🗗 Restore" : "⛶ Maximize"}
+            {stageMax ? <Minimize2 className="h-3 w-3" /> : <Maximize2 className="h-3 w-3" />}
+            {stageMax ? "Restore" : "Maximize"}
           </button>
           <div className="flex items-center gap-2">
             <div className="text-right text-[10px] text-muted-foreground">
@@ -95,20 +108,38 @@ function Index() {
 
       {stageMax ? (
         <div className="min-h-0 flex-1">{stage}</div>
-      ) : (
-        <div className="grid min-h-0 flex-1 grid-cols-12 gap-3">
-          <div className="col-span-4 flex min-h-0 flex-col">
-            <CliTerminal />
-          </div>
-          <div className={`flex min-h-0 flex-col ${mode === "browser" ? "col-span-8" : "col-span-5"}`}>
-            {stage}
-          </div>
-          {mode !== "browser" && (
-            <div className="col-span-3 flex min-h-0 flex-col">
-              {mode === "cards" ? <CardsSidePanel /> : <ArenaSidePanel />}
-            </div>
-          )}
+      ) : cliCollapsed === "full" ? (
+        <div className="min-h-0 flex-1">
+          <CliTerminal />
         </div>
+      ) : cliCollapsed === "game" ? (
+        <ResizablePanelGroup orientation="horizontal" className="min-h-0 flex-1">
+          <ResizablePanel defaultSize={5} minSize={5} maxSize={5} className="flex min-h-0 flex-col">
+            <CliTerminal />
+          </ResizablePanel>
+          <ResizableHandle withHandle />
+          <ResizablePanel className="flex min-h-0 flex-col">
+            {stage}
+          </ResizablePanel>
+        </ResizablePanelGroup>
+      ) : (
+        <ResizablePanelGroup orientation="horizontal" className="min-h-0 flex-1">
+          <ResizablePanel defaultSize={30} minSize={15} className="flex min-h-0 flex-col">
+            <CliTerminal />
+          </ResizablePanel>
+          <ResizableHandle withHandle />
+          <ResizablePanel defaultSize={55} minSize={30} className="flex min-h-0 flex-col">
+            {stage}
+          </ResizablePanel>
+          {mode !== "browser" && (
+            <>
+              <ResizableHandle withHandle />
+              <ResizablePanel defaultSize={15} minSize={10} className="flex min-h-0 flex-col">
+                {mode === "cards" ? <CardsSidePanel /> : <ArenaSidePanel />}
+              </ResizablePanel>
+            </>
+          )}
+        </ResizablePanelGroup>
       )}
     </div>
   );
