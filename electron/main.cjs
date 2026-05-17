@@ -1,9 +1,11 @@
 // Electron main process
 // Spawns user's CLI (e.g. `claude`) under a real PTY and bridges data to the renderer.
 const { app, BrowserWindow, ipcMain, dialog } = require("electron");
+const http = require("http");
 const path = require("path");
 const fs = require("fs");
 const os = require("os");
+const { Worker } = require("worker_threads");
 
 let pty;
 try {
@@ -28,12 +30,65 @@ const sessions = new Map();
  * }>}
  */
 const sessionState = new Map();
-const ECHO_WINDOW_MS = 600;       // data within this window after a user keypress is treated as terminal echo
-const USER_TYPING_LOCKOUT_MS = 1500; // after a user keypress, refuse to flip IDLE→STREAMING for this long
-const AI_ACTIVE_THRESHOLD = 80;   // need this many net AI bytes per ~400ms window to be considered STREAMING
+const ECHO_WINDOW_MS = 600;
+const USER_TYPING_LOCKOUT_MS = 1500;
+const AI_ACTIVE_THRESHOLD = 80;
 
 let mainWindow;
 let idleWatcher;
+let serverPort = 0;
+
+// Serve static files with proper headers for ES modules
+function createHttpServer(servePath) {
+  return new Promise((resolve) => {
+    const server = http.createServer((req, res) => {
+      let url = req.url.split("?")[0];
+      let filePath = path.join(servePath, url === "/" ? "index.html" : url);
+
+      // Handle SPA routing - serve index.html for unknown routes
+      if (!fs.existsSync(filePath)) {
+        filePath = path.join(servePath, "index.html");
+      }
+
+      const ext = path.extname(filePath);
+      const mimeTypes = {
+        ".html": "text/html",
+        ".js": "application/javascript",
+        ".mjs": "application/javascript",
+        ".css": "text/css",
+        ".json": "application/json",
+        ".png": "image/png",
+        ".jpg": "image/jpeg",
+        ".svg": "image/svg+xml",
+        ".wasm": "application/wasm",
+      };
+
+      try {
+        const content = fs.readFileSync(filePath);
+        const mimeType = mimeTypes[ext] || "application/octet-stream";
+
+        // CORS headers for ES modules
+        res.writeHead(200, {
+          "Content-Type": mimeType,
+          "Access-Control-Allow-Origin": "*",
+          "Cross-Origin-Opener-Policy": "same-origin",
+          "Cross-Origin-Embedder-Policy": "require-corp",
+        });
+        res.end(content);
+      } catch (err) {
+        res.writeHead(404);
+        res.end("Not found: " + url);
+      }
+    });
+
+    server.listen(0, "127.0.0.1", () => {
+      const addr = server.address();
+      serverPort = addr.port;
+      console.log(`[codequest] HTTP server started on port ${serverPort}`);
+      resolve();
+    });
+  });
+}
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -80,9 +135,26 @@ function createWindow() {
     console.log("[codequest] Loading dev URL:", process.env.CODEQUEST_DEV_URL);
     mainWindow.loadURL(process.env.CODEQUEST_DEV_URL);
   } else {
-    const filePath = path.join(__dirname, "..", "dist", "client", "index.html");
-    console.log("[codequest] Loading file:", filePath);
-    mainWindow.loadFile(filePath);
+    // Determine the client dist folder path
+    let clientPath;
+    if (__dirname.includes(".asar")) {
+      // In asar: __dirname is app.asar/electron
+      clientPath = path.join(__dirname, "..", "client");
+    } else {
+      // Development: electron folder is at project root
+      clientPath = path.join(__dirname, "..", "client");
+    }
+
+    console.log("[codequest] Serving files from:", clientPath);
+
+    // Start HTTP server and load URL
+    createHttpServer(clientPath).then(() => {
+      const url = `http://127.0.0.1:${serverPort}`;
+      console.log("[codequest] Loading URL:", url);
+      mainWindow.loadURL(url);
+    }).catch((err) => {
+      console.error("[codequest] Failed to start HTTP server:", err);
+    });
   }
 
   mainWindow.on("closed", () => {
