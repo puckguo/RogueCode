@@ -1,6 +1,7 @@
 import { useGame } from "@/game/store";
 import type { Card } from "@/game/types";
-import { StatusStrip, TalentsSection, RewardModals, RunSummaryModal, Section } from "./shared";
+import { StatusStrip, TalentsSection, RewardModals, RunSummaryModal, Section, RelicToast } from "./shared";
+import { RelicPanel } from "./RelicPanel";
 
 const kindColor: Record<Card["kind"], string> = {
   attack: "border-rose-500/50 text-rose-300",
@@ -28,7 +29,7 @@ export function CardsSidePanel() {
   return (
     <div className="flex h-full flex-col gap-2 overflow-y-auto pr-1">
       <StatusStrip />
-
+      <RelicPanel />
       <Section title="Run Progress" defaultOpen={true}>
         <div className="grid grid-cols-3 gap-2 text-center text-xs">
           <div>
@@ -92,5 +93,6 @@ export function CardsSidePanel() {
       <RewardModals />
       <RunSummaryModal />
     </div>
+    <RelicToast />
   );
 }
