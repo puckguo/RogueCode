@@ -179,7 +179,7 @@ function TalentTreeView({
                   : unlocked
                     ? `border-primary/50 bg-card hover:border-primary ${meta.color}`
                     : "border-border bg-card/50 opacity-40 cursor-not-allowed"
-              } ${maxed ? "ring-2 ring-rarity-legendary" : ""} grid ${size} place-items-center`}
+              } ${maxed ? "ring-2 ring-rarity-legendary" : ""} ${totalPoints > 0 && unlocked && !maxed ? "ring-2 ring-accent shadow-[0_0_8px_rgba(251,191,36,0.5)] animate-pulse" : ""} grid ${size} place-items-center`}
               disabled={!unlocked || maxed || totalPoints <= 0}
             >
               {rank}/{n.maxRank}
@@ -214,7 +214,12 @@ export function StatusStrip() {
         </div>
         <div>
           <div className="text-[10px] uppercase text-muted-foreground">Talent Pts</div>
-          <div className="text-lg font-bold text-accent">✦ {totalPoints}</div>
+          <div className={`text-lg font-bold text-accent ${totalPoints > 0 ? "animate-pulse" : ""}`}>✦ {totalPoints}</div>
+          {totalPoints > 0 && (
+            <div className="mt-1 h-1 w-full rounded-full bg-accent/40">
+              <div className="h-1 rounded-full bg-accent animate-pulse" style={{ width: `${Math.min(totalPoints * 10, 100)}%` }} />
+            </div>
+          )}
         </div>
         <div>
           <div className="text-[10px] uppercase text-muted-foreground">AI tok/s</div>
@@ -259,9 +264,9 @@ export function TalentsSection() {
   const [talentMax, setTalentMax] = useState(false);
   return (
     <>
-      <div className="rounded-lg border bg-card p-3">
+      <div className={`rounded-lg border bg-card p-3 ${totalPoints > 0 ? "border-accent/60 shadow-[0_0_8px_rgba(251,191,36,0.3)]" : ""}`}>
         <div className="mb-2 flex items-center justify-between text-xs font-bold uppercase tracking-wider text-muted-foreground">
-          <span>Talent Tree (Engineer)</span>
+          <span className={totalPoints > 0 ? "text-accent" : ""}>Talent Tree (Engineer) {totalPoints > 0 && "✦"}</span>
           <div className="flex items-center gap-2">
             <button
               onClick={() => setTalentMax(true)}

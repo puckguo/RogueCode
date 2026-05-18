@@ -1,45 +1,39 @@
 # roguecode
 
-A roguelike card game **paced by your AI coding agent**. Spawn `claude`, `aider`, or any CLI inside roguecode's real PTY terminal — while the AI streams tokens, the battle advances; when the AI goes idle, the game freezes and forces you back to the terminal.
+**Your AI agent's co-pilot — entertainment that moves with your workflow.**
+
+A gamified terminal for AI coding. Spawn your AI CLI (Claude Code, aider, or any CLI tool) inside roguecode's real PTY terminal and watch it transform into an arcade — your coding activity drives the game forward; take a break and the game waits for you.
 
 ## Concept
 
-roguecode turns coding sessions into roguelike runs. Your AI coding assistant (Claude Code, aider, etc.) becomes the combat engine — every keystroke advances the battle, every idle moment lets the monsters attack. The longer your AI works without stopping, the stronger your build becomes.
+roguecode is a terminal-first tool that adds an entertainment layer on top of your AI agent workflow. Your AI agent doesn't just work anymore — it coordinates entertainment with your activity.
 
-**Key insight:** An AI that outputs code rapidly is a "hot streak" — the game rewards this with bonus damage, energy, and combo multipliers. When the AI goes idle (1.5 seconds without output), combat pauses and you're locked out of the game until the AI starts coding again.
+**The mechanic is simple:** When your agent is actively working, entertainment flows. When it goes idle for 1.5 seconds, entertainment pauses and you're locked out until it resumes.
 
-## Game Modes
-
-- **Cards Mode**: Classic Slay the Spire-style deckbuilding — draw cards, manage energy, build combos
-- **Arena Mode**: Endless survival against waves of enemies
-- **Browser Mode**: View game stats and history
+It's not about the entertainment — it's about making your work sessions more engaging.
 
 ## Features
 
-### Core Mechanics
-- **Real PTY terminal** via `node-pty` — full xterm.js integration, not mocked
-- **AI idle detection** — 1.5 second timeout freezes the game
-- **STREAMING/IDLE_WAITING status** — visual feedback showing AI activity
+### Core Terminal
 
-### Combat System
-- Energy-based card play (3 energy per turn)
-- Draw/discard mechanics with deck manipulation
-- Block stacking with armor mechanics
-- Critical hit system with combo multipliers
-- Buff/debuff tracking
+- **Real PTY terminal** via `node-pty` — full xterm.js integration, no mocks
+- **Seamless AI CLI integration** — run Claude Code, aider, or any CLI tool
+- **Split-panel UI** — adjustable terminal + game + stats layout
+- **Dark ARPG aesthetic** — ember orange accents, designed for long sessions
 
-### Progression
-- **Diablo-style loot**: 5 tiers (Common → Legendary) with random affixes
-- **Grim Dawn talent tree**: Persistent upgrades saved to localStorage
-- **Boss fights**: Every 5 waves
-- **Elite enemies**: Every 3 waves
+### Gamification Layer
 
-### UI/UX
-- Resizable split panels (CLI + game + stats)
-- Dark ARPG theme with ember orange accents
-- Collapse CLI to narrow/game/full modes
-- Maximize game stage option
-- Debug mode (run game without CLI requirement)
+- **AI activity drives gameplay** — streaming tokens advances combat
+- **Hot streak system** — rapid AI output rewards bonus damage, energy, combos
+- **Idle lockout** — 1.5s AI idle freezes the game and locks you out until you resume
+- **Visual status feedback** — STREAMING / IDLE_WAITING indicators
+
+### Progression (激励系统)
+
+- **Diablo-style loot** — 5 tiers (Common → Legendary) with random affixes
+- **Grim Dawn talent tree** — persistent upgrades saved to localStorage
+- **Boss fights** — every 5 waves / **Elite enemies** — every 3 waves
+- **Multiple game modes** — Cards (deckbuilding), Arena (survival), Browser (stats)
 
 ## Requirements
 
@@ -219,4 +213,4 @@ MIT License
 
 ---
 
-**roguecode** — Where your AI coding streak becomes your combat power.
+**roguecode** — Work happily. Work productively.
