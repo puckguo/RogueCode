@@ -42,6 +42,26 @@ export type MythicAffix = {
 
 export type Rarity = "common" | "magic" | "rare" | "set" | "legendary";
 
+export type RelicRarity = "common" | "rare" | "legendary";
+
+export type RelicEffect = {
+  atk?: number;
+  hp?: number;
+  crit?: number;
+  energy?: number;        // bonus energy per turn
+  blockBonus?: number;    // bonus block at turn start
+  lifesteal?: number;
+  dropBonus?: number;
+};
+
+export type Relic = {
+  id: string;
+  name: string;
+  desc: string;
+  rarity: RelicRarity;
+  effects: RelicEffect;
+};
+
 export type FireMode = "normal" | "shotgun" | "burst" | "charge" | "aoe";
 export type SkillKind = "nova" | "laser" | "missile" | "slow";
 
