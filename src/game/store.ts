@@ -189,7 +189,7 @@ export function isAnyCliIdle(s: Pick<State, "sessions">, debugMode?: boolean): b
   return started.some((x) => x.status !== "STREAMING");
 }
 
-function computeStats(s: Pick<State, "talentRanks" | "equipment">) {
+function computeStats(s: Pick<State, "talentRanks" | "equipment" | "relics">) {
   let atk = 5;
   let hp = 50;
   let crit = 5;
@@ -214,6 +214,14 @@ function computeStats(s: Pick<State, "talentRanks" | "equipment">) {
       dropBonus += a.dropBonus || 0;
       lifesteal += a.lifesteal || 0;
     }
+  }
+  for (const relic of s.relics) {
+    atk += relic.effects.atk || 0;
+    hp += relic.effects.hp || 0;
+    crit += relic.effects.crit || 0;
+    energy += relic.effects.energy || 0;
+    dropBonus += relic.effects.dropBonus || 0;
+    lifesteal += relic.effects.lifesteal || 0;
   }
   return { atk, maxHp: hp, crit, energy, dropBonus, lifesteal };
 }
