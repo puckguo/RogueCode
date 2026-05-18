@@ -1,4 +1,4 @@
-import type { Affix, ArenaUpgrade, Card, Enemy, MythicAffix, Rarity, TalentNode } from "./types";
+import type { Affix, ArenaUpgrade, Card, Enemy, MythicAffix, Rarity, Relic, RelicRarity, TalentNode } from "./types";
 
 export const RARITY_LABEL: Record<Rarity, string> = {
   common: "Common",
@@ -317,4 +317,57 @@ export function mythicScale(level: number) {
     atkMul: Math.pow(1.05, lv - 1),
     rewardMul: 1 + (lv - 1) * 0.15, // shards scale with level
   };
+}
+
+// =====================================================================
+// RELIC POOL — passive global buffs that stack infinitely
+// =====================================================================
+
+export const RELIC_POOL: Relic[] = [
+  // Common relics
+  { id: "r_rusty_core", name: "Rusty Core", desc: "+2 Attack", rarity: "common", effects: { atk: 2 } },
+  { id: "r_glass_shard", name: "Glass Shard", desc: "+3% Crit", rarity: "common", effects: { crit: 3 } },
+  { id: "r_ember_frag", name: "Ember Fragment", desc: "+1 Attack, +1% Crit", rarity: "common", effects: { atk: 1, crit: 1 } },
+  { id: "r_stamina", name: "Stamina Chip", desc: "+8 Max HP", rarity: "common", effects: { hp: 8 } },
+  { id: "r_dagger_bit", name: "Dagger Bit", desc: "+5 Max HP, +1 Attack", rarity: "common", effects: { hp: 5, atk: 1 } },
+
+  // Rare relics
+  { id: "r_war_banner", name: "War Banner", desc: "+5 Attack, +10 Max HP", rarity: "rare", effects: { atk: 5, hp: 10 } },
+  { id: "r_crimson_eye", name: "Crimson Eye", desc: "+8% Crit, +5% Lifesteal", rarity: "rare", effects: { crit: 8, lifesteal: 5 } },
+  { id: "r_void_crystal", name: "Void Crystal", desc: "+1 Energy per turn, +10% Magic Find", rarity: "rare", effects: { energy: 1, dropBonus: 10 } },
+  { id: "r_iron_bastion", name: "Iron Bastion", desc: "+20 Max HP, +3 Block on turn start", rarity: "rare", effects: { hp: 20, blockBonus: 3 } },
+  { id: "r_spark_coil", name: "Spark Coil", desc: "+4 Attack, +4% Crit", rarity: "rare", effects: { atk: 4, crit: 4 } },
+  { id: "r_leech", name: "Leech Protocol", desc: "+8% Lifesteal", rarity: "rare", effects: { lifesteal: 8 } },
+
+  // Legendary relics
+  { id: "r_dragon_heart", name: "Dragon's Heart", desc: "+10 Attack, +10% Crit, +20 Max HP, +10% Lifesteal", rarity: "legendary", effects: { atk: 10, crit: 10, hp: 20, lifesteal: 10 } },
+  { id: "r_phoenix", name: "Phoenix Core", desc: "+15 Max HP, +1 Energy per turn, +5% Magic Find", rarity: "legendary", effects: { hp: 15, energy: 1, dropBonus: 5 } },
+  { id: "r_overclocker", name: "Overclocker", desc: "+8 Attack, +8% Crit, +1 Energy per turn", rarity: "legendary", effects: { atk: 8, crit: 8, energy: 1 } },
+];
+
+export const RELIC_RARITY_WEIGHT: Record<RelicRarity, number> = {
+  common: 70,
+  rare: 25,
+  legendary: 5,
+};
+
+export function rollRelic(wave: number): Relic {
+  // wave only affects legendary weight (boss waves have 4x chance)
+  // Relics are static buffs — wave does not scale their power (unlike enemies)
+  const isBoss = wave > 0 && wave % 5 === 0;
+  const weights: [RelicRarity, number][] = [
+    ["common", RELIC_RARITY_WEIGHT.common],
+    ["rare", RELIC_RARITY_WEIGHT.rare],
+    ["legendary", isBoss ? 20 : RELIC_RARITY_WEIGHT.legendary],
+  ];
+  const total = weights.reduce((s, [, w]) => s + w, 0);
+  let r = Math.random() * total;
+  let rarity: RelicRarity = "common";
+  for (const [k, w] of weights) {
+    r -= w;
+    if (r <= 0) { rarity = k; break; }
+  }
+  const pool = RELIC_POOL.filter((rel) => rel.rarity === rarity);
+  if (pool.length === 0) return RELIC_POOL[0];
+  return pool[Math.floor(Math.random() * pool.length)];
 }
