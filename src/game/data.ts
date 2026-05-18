@@ -134,8 +134,8 @@ export function rollEnemy(wave: number): Enemy {
       ? ELITE_NAMES[Math.floor(Math.random() * ELITE_NAMES.length)]
       : ENEMY_NAMES[Math.floor(Math.random() * ENEMY_NAMES.length)];
   const base = 14 + wave * 6;
-  const hp = isBoss ? base * 4 : isElite ? base * 2 : base;
-  const atk = isBoss ? 8 + wave : isElite ? 5 + Math.floor(wave / 2) : 3 + Math.floor(wave / 3);
+  const hp = isBoss ? base * 2.5 : isElite ? base * 2 : base;
+  const atk = isBoss ? 5 + Math.floor(wave * 0.8) : isElite ? 4 + Math.floor(wave / 2) : 3 + Math.floor(wave / 3);
   return {
     id: `e_${wave}_${Math.random().toString(36).slice(2, 7)}`,
     name,
