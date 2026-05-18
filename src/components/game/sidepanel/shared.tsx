@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from "react";
 import { useGame } from "@/game/store";
-import type { Item, Rarity, TalentNode } from "@/game/types";
+import type { Item, Rarity, Relic, TalentNode } from "@/game/types";
 import { TALENT_TREE } from "@/game/data";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -447,6 +447,57 @@ export function RunSummaryModal() {
               </button>
             </div>
           </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+}
+
+export function RelicToast() {
+  const { relicDropToast, clearRelicToast } = useGame();
+  return (
+    <AnimatePresence>
+      {relicDropToast && (
+        <motion.div
+          role="status"
+          aria-live="polite"
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -20 }}
+          className={`fixed left-1/2 top-8 z-50 -translate-x-1/2 rounded-xl border-2 bg-card px-6 py-3 shadow-xl ${
+            relicDropToast.rarity === "legendary"
+              ? "border-rarity-legendary/80 text-rarity-legendary"
+              : relicDropToast.rarity === "rare"
+              ? "border-rarity-rare/70 text-rarity-rare"
+              : "border-rarity-common/50 text-rarity-common"
+          }`}
+        >
+          <div className="flex items-center gap-3">
+            <span className="text-2xl">✦</span>
+            <div>
+              <div className="text-xs uppercase tracking-wider opacity-70">Relic Acquired</div>
+              <div className="flex items-center gap-2">
+                <span className="font-bold">{relicDropToast.name}</span>
+                <span className={`rounded px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider ${
+                  relicDropToast.rarity === "legendary"
+                    ? "bg-rarity-legendary/20 text-rarity-legendary"
+                    : relicDropToast.rarity === "rare"
+                    ? "bg-rarity-rare/20 text-rarity-rare"
+                    : "bg-rarity-common/20 text-rarity-common"
+                }`}>
+                  {relicDropToast.rarity}
+                </span>
+              </div>
+              <div className="text-xs text-foreground/70">{relicDropToast.desc}</div>
+            </div>
+            <button
+              aria-label="Dismiss relic notification"
+              onClick={clearRelicToast}
+              className="ml-2 rounded px-2 py-1 text-xs hover:bg-muted"
+            >
+              ✕
+            </button>
+          </div>
         </motion.div>
       )}
     </AnimatePresence>
