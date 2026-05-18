@@ -10,4 +10,10 @@ export default defineConfig({
     outDir: "dist/client",
     emptyOutDir: true,
   },
+  test: {
+    environment: "jsdom",
+    globals: true,
+    include: ["src/**/*.{test,spec}.{js,ts}"],
+    exclude: ["node_modules", "dist"],
+  },
 });

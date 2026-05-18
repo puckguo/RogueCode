@@ -21,7 +21,10 @@
     "electron:dev": "CODEQUEST_DEV_URL=http://localhost:8080 electron .",
     "package:linux": "vite build && electron-packager . CodeQuest --platform=linux --arch=x64 --out=electron-release --overwrite --ignore='^/src' --ignore='^/electron-release' --ignore='^/public' --ignore='node_modules/(?!node-pty|nan)'",
     "package:mac": "vite build && electron-packager . CodeQuest --platform=darwin --arch=arm64 --out=electron-release --overwrite --ignore='^/src' --ignore='^/electron-release' --ignore='^/public' --ignore='node_modules/(?!node-pty|nan)'",
-    "package:win": "vite build && electron-builder --config electron-builder.json --win portable"
+    "package:win": "vite build && electron-builder --config electron-builder.json --win portable",
+    "test": "vitest",
+    "test:run": "vitest run",
+    "test:ui": "vitest --ui"
   },
   "dependencies": {
     "@cloudflare/vite-plugin": "^1.25.5",
@@ -89,6 +92,7 @@
     "@electron/rebuild": "^4.0.4",
     "@eslint/js": "^9.32.0",
     "@lovable.dev/vite-tanstack-config": "^1.4.0",
+    "@testing-library/react": "^16.3.2",
     "@types/node": "^22.16.5",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
@@ -102,10 +106,12 @@
     "eslint-plugin-react-hooks": "^5.2.0",
     "eslint-plugin-react-refresh": "^0.4.20",
     "globals": "^15.15.0",
+    "jsdom": "^29.1.1",
     "node-abi": "^4.29.0",
     "prettier": "^3.7.3",
     "typescript": "^5.8.3",
     "typescript-eslint": "^8.56.1",
-    "vite": "^7.3.1"
+    "vite": "^7.3.1",
+    "vitest": "^1.6.0"
   }
 }
