@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { Card, CliSession, CliStatus, Enemy, Item, MythicAffix, Rarity, TalentNode } from "./types";
+import type { Card, CliSession, CliStatus, Enemy, Item, MythicAffix, Rarity, Relic, TalentNode } from "./types";
 import {
   AFFIX_POOL,
   ITEM_NAMES,
@@ -22,16 +22,17 @@ type SaveData = {
   talentRanks: Record<string, number>;
   totalPoints: number;
   stash: Item[];
+  relics: Relic[];
 };
 
 function loadSave(): SaveData {
-  if (typeof localStorage === "undefined") return { shards: 0, talentRanks: {}, totalPoints: 0, stash: [] };
+  if (typeof localStorage === "undefined") return { shards: 0, talentRanks: {}, totalPoints: 0, stash: [], relics: [] };
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return { shards: 0, talentRanks: {}, totalPoints: 0, stash: [] };
+    if (!raw) return { shards: 0, talentRanks: {}, totalPoints: 0, stash: [], relics: [] };
     return JSON.parse(raw);
   } catch {
-    return { shards: 0, talentRanks: {}, totalPoints: 0, stash: [] };
+    return { shards: 0, talentRanks: {}, totalPoints: 0, stash: [], relics: [] };
   }
 }
 
@@ -120,6 +121,8 @@ type State = {
   talentRanks: Record<string, number>;
   totalPoints: number;
   stash: Item[];
+  relics: Relic[];
+  relicDropToast: Relic | null;
 
   // Mythic Keystone (Arena difficulty)
   mythicLevel: number;
@@ -160,6 +163,7 @@ type State = {
 
   setShardsAdd: (n: number) => void;
   addInventoryItem: (it: Item, consumeLegendary?: boolean) => void;
+  clearRelicToast: () => void;
 
   // Mythic actions
   setMythicLevel: (n: number) => void;
@@ -251,6 +255,8 @@ export const useGame = create<State>()((set, get) => {
     talentRanks: save.talentRanks,
     totalPoints: save.totalPoints,
     stash: save.stash,
+    relics: save.relics,
+    relicDropToast: null,
 
     sessions: [{ id: "cli_1", label: "CLI 1", status: "IDLE_WAITING", hasStarted: false, lastActivityTs: 0 }],
     activeSessionId: "cli_1",
@@ -318,7 +324,7 @@ export const useGame = create<State>()((set, get) => {
       const aff = rollMythicAffixes(s.mythicLevel, Math.random() * 1e9);
       const newShards = s.shards - 5;
       set({ mythicAffixes: aff, shards: newShards });
-      persist({ shards: newShards, talentRanks: s.talentRanks, totalPoints: s.totalPoints, stash: s.stash });
+      persist({ shards: newShards, talentRanks: s.talentRanks, totalPoints: s.totalPoints, stash: s.stash, relics: s.relics });
     },
 
     setCliStatus: (s: CliStatus) => {
@@ -453,6 +459,7 @@ export const useGame = create<State>()((set, get) => {
         talentRanks: s.talentRanks,
         totalPoints: newPoints,
         stash: s.stash,
+        relics: s.relics,
       };
       persist(save);
       set({
@@ -470,12 +477,13 @@ export const useGame = create<State>()((set, get) => {
     },
 
     dismissRunSummary: () => set({ runSummary: null }),
+    clearRelicToast: () => set({ relicDropToast: null }),
 
     setShardsAdd: (n: number) => {
       const s = get();
       const newShards = s.shards + n;
       set({ shards: newShards });
-      persist({ shards: newShards, talentRanks: s.talentRanks, totalPoints: s.totalPoints, stash: s.stash });
+      persist({ shards: newShards, talentRanks: s.talentRanks, totalPoints: s.totalPoints, stash: s.stash, relics: s.relics });
     },
     addInventoryItem: (it: Item, consumeLegendary?: boolean) => {
       const s = get();
@@ -493,7 +501,7 @@ export const useGame = create<State>()((set, get) => {
       const newInv = s.inventory.filter((i) => i.id !== id);
       const newStash = [...s.stash, it];
       set({ inventory: newInv, stash: newStash });
-      persist({ shards: s.shards, talentRanks: s.talentRanks, totalPoints: s.totalPoints, stash: newStash });
+      persist({ shards: s.shards, talentRanks: s.talentRanks, totalPoints: s.totalPoints, stash: newStash, relics: s.relics });
     },
     withdrawStash: (id: string) => {
       const s = get();
@@ -501,7 +509,7 @@ export const useGame = create<State>()((set, get) => {
       if (!it || !s.inRun) return;
       const newStash = s.stash.filter((i) => i.id !== id);
       set({ inventory: [...s.inventory, it], stash: newStash });
-      persist({ shards: s.shards, talentRanks: s.talentRanks, totalPoints: s.totalPoints, stash: newStash });
+      persist({ shards: s.shards, talentRanks: s.talentRanks, totalPoints: s.totalPoints, stash: newStash, relics: s.relics });
     },
 
     playCard: (idx: number) => {
@@ -690,7 +698,7 @@ export const useGame = create<State>()((set, get) => {
       const newInv = s.inventory.filter((i) => i.id !== id);
       const newStash = s.stash.filter((i) => i.id !== id);
       set({ shards: newShards, inventory: newInv, stash: newStash });
-      persist({ shards: newShards, talentRanks: s.talentRanks, totalPoints: s.totalPoints, stash: newStash });
+      persist({ shards: newShards, talentRanks: s.talentRanks, totalPoints: s.totalPoints, stash: newStash, relics: s.relics });
     },
 
     spendTalent: (id: string) => {
@@ -708,7 +716,7 @@ export const useGame = create<State>()((set, get) => {
       const newRanks = { ...s.talentRanks, [id]: cur + 1 };
       const newPoints = s.totalPoints - 1;
       set({ talentRanks: newRanks, totalPoints: newPoints });
-      persist({ shards: s.shards, talentRanks: newRanks, totalPoints: newPoints, stash: s.stash });
+      persist({ shards: s.shards, talentRanks: newRanks, totalPoints: newPoints, stash: s.stash, relics: s.relics });
     },
 
     refundAllTalents: () => {
@@ -719,7 +727,7 @@ export const useGame = create<State>()((set, get) => {
       const newPoints = s.totalPoints + refunded;
       const newShards = s.shards - cost;
       set({ talentRanks: {}, totalPoints: newPoints, shards: newShards });
-      persist({ shards: newShards, talentRanks: {}, totalPoints: newPoints, stash: s.stash });
+      persist({ shards: newShards, talentRanks: {}, totalPoints: newPoints, stash: s.stash, relics: s.relics });
     },
 
     tick: () => {
@@ -772,7 +780,7 @@ export const useGame = create<State>()((set, get) => {
       if (isBoss) {
         const newShards = s.shards + 20;
         set({ shards: newShards });
-        persist({ shards: newShards, talentRanks: s.talentRanks, totalPoints: s.totalPoints, stash: s.stash });
+        persist({ shards: newShards, talentRanks: s.talentRanks, totalPoints: s.totalPoints, stash: s.stash, relics: s.relics });
       }
     },
 
@@ -840,7 +848,7 @@ export const useGame = create<State>()((set, get) => {
               const newHp = Math.max(1, ss.player.hp - 8);
               const newSh = ss.shards + 12;
               set({ player: { ...ss.player, hp: newHp }, shards: newSh });
-              persist({ shards: newSh, talentRanks: ss.talentRanks, totalPoints: ss.totalPoints, stash: ss.stash });
+              persist({ shards: newSh, talentRanks: ss.talentRanks, totalPoints: ss.totalPoints, stash: ss.stash, relics: ss.relics });
             }},
             { label: "Leave", effect: () => {} },
           ],
@@ -869,7 +877,7 @@ export const useGame = create<State>()((set, get) => {
               if (Math.random() < 0.5) {
                 const newSh = ss.shards + 20;
                 set({ shards: newSh, log: [...ss.log, "✨ +20 ⟡!"] });
-                persist({ shards: newSh, talentRanks: ss.talentRanks, totalPoints: ss.totalPoints, stash: ss.stash });
+                persist({ shards: newSh, talentRanks: ss.talentRanks, totalPoints: ss.totalPoints, stash: ss.stash, relics: ss.relics });
               } else {
                 const newHp = Math.max(1, ss.player.hp - 10);
                 set({ player: { ...ss.player, hp: newHp }, log: [...ss.log, "💀 Cursed! -10 HP"] });
@@ -928,7 +936,7 @@ export const useGame = create<State>()((set, get) => {
         pendingShop: { ...s.pendingShop, cards: newCards },
         log: [...s.log, `🛒 Bought ${c.name} for ${cost} ⟡.`],
       });
-      persist({ shards: newSh, talentRanks: s.talentRanks, totalPoints: s.totalPoints, stash: s.stash });
+      persist({ shards: newSh, talentRanks: s.talentRanks, totalPoints: s.totalPoints, stash: s.stash, relics: s.relics });
     },
 
     shopRemoveCard: (cardId: string) => {
@@ -943,7 +951,7 @@ export const useGame = create<State>()((set, get) => {
         deck: newDeck,
         log: [...s.log, `🗑 Removed a card for ${s.pendingShop.removeCost} ⟡.`],
       });
-      persist({ shards: newSh, talentRanks: s.talentRanks, totalPoints: s.totalPoints, stash: s.stash });
+      persist({ shards: newSh, talentRanks: s.talentRanks, totalPoints: s.totalPoints, stash: s.stash, relics: s.relics });
     },
   } as any;
 });
