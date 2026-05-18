@@ -767,12 +767,26 @@ export const useGame = create<State>()((set, get) => {
       }
       if (consumedLegendary) log.push("⚡ Legendary drop triggered by your commit!");
 
+      // --- Relic drop check ---
+      let relicDrop: Relic | null = null;
+      const dropChance = node?.type === "boss" ? 0.40
+        : node?.type === "elite" ? 0.25
+        : 0.15 + s.wave * 0.01;
+      if (Math.random() < dropChance) {
+        const rolled = rollRelic(s.wave);
+        relicDrop = { ...rolled, id: `rel_${Math.random().toString(36).slice(2, 9)}` };
+        log.push(`✦ Relic obtained: ${rolled.name}`);
+      }
+
       // End combat: hand + discard + exhaust all return to master deck (StS-style).
       const path = s.path.map((n: PathNode, i: number) => i === s.pathIdx ? { ...n, cleared: true } : n);
+      const newRelics = relicDrop ? [...s.relics, relicDrop] : s.relics;
 
       set({
         rewardChoices: choices,
         itemReward,
+        relicDropToast: relicDrop,
+        relics: newRelics,
         log: log.slice(-30),
         nextDropLegendary: consumedLegendary ? false : s.nextDropLegendary,
         inCombat: false,
@@ -788,7 +802,7 @@ export const useGame = create<State>()((set, get) => {
       if (isBoss) {
         const newShards = s.shards + 20;
         set({ shards: newShards });
-        persist({ shards: newShards, talentRanks: s.talentRanks, totalPoints: s.totalPoints, stash: s.stash, relics: s.relics });
+        persist({ shards: newShards, talentRanks: s.talentRanks, totalPoints: s.totalPoints, stash: s.stash, relics: get().relics });
       }
     },
 
