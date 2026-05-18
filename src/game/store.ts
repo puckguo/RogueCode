@@ -44,7 +44,7 @@ function persist(s: SaveData) {
   void writeSaveMd(s);
 }
 
-function rollItem(ilvl: number, magicFind: number, forceRarity?: Rarity): Item {
+export function rollItem(ilvl: number, magicFind: number, forceRarity?: Rarity): Item {
   const slots: Item["slot"][] = ["weapon", "armor", "helm", "boots", "ring", "amulet"];
   const slot = slots[Math.floor(Math.random() * slots.length)];
   const rarity: Rarity = forceRarity || rollRarity(magicFind);
@@ -459,7 +459,7 @@ export const useGame = create<State>()((set, get) => {
     endRun: () => {
       const s = get();
       const earned = Math.floor(s.wave * 5 + s.combo * 2);
-      const points = Math.floor(s.wave / 2);
+      const points = Math.floor(s.wave * 0.6);
       const newShards = s.shards + earned;
       const newPoints = s.totalPoints + points;
       const save: SaveData = {
@@ -771,7 +771,7 @@ export const useGame = create<State>()((set, get) => {
       let relicDrop: Relic | null = null;
       const dropChance = node?.type === "boss" ? 0.40
         : node?.type === "elite" ? 0.25
-        : 0.15 + s.wave * 0.01;
+        : 0.25 + s.wave * 0.01;
       if (Math.random() < dropChance) {
         const rolled = rollRelic(s.wave);
         relicDrop = { ...rolled, id: `rel_${Math.random().toString(36).slice(2, 9)}` };

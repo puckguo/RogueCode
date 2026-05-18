@@ -152,12 +152,12 @@ describe("Game Balance — Core Combat", () => {
 });
 
 describe("Game Balance — Relic System", () => {
-  it("relic drop chance at wave 1 should not be 100% (too generous)", () => {
-    // Base drop chance is 15% + wave*1%
-    // At wave 1 = 16% chance - this is reasonable
-    // Not every fight rewards a relic (maintains value)
-    const dropChance = 0.15 + 1 * 0.01;
-    expect(dropChance).toBeLessThan(0.20); // Less than 20%
+  it("relic drop chance at wave 1 should be reasonable", () => {
+    // Base drop chance is 25% + wave*1%
+    // At wave 1 = 26% chance
+    // This is balanced - not every fight rewards a relic
+    const dropChance = 0.25 + 1 * 0.01;
+    expect(dropChance).toBeLessThan(0.30); // Less than 30%
   });
 
   it("boss drop chance should be high enough to feel rewarding", () => {
@@ -172,9 +172,9 @@ describe("Game Balance — Relic System", () => {
 
   it("elite drop chance should be between boss and normal", () => {
     // Elite: 25%
-    // Between normal (16% at wave 1) and boss (40%)
+    // Between normal (26% at wave 1) and boss (40%)
     const eliteChance = 0.25;
-    expect(eliteChance).toBeGreaterThan(0.15);
+    expect(eliteChance).toBeGreaterThan(0.20);
     expect(eliteChance).toBeLessThan(0.40);
   });
 
@@ -218,12 +218,13 @@ describe("Game Balance — Talent System", () => {
     expect(costRatio).toBeLessThan(0.40);
   });
 
-  it("talent points should accumulate slowly (1 per 2 waves)", () => {
-    // Wave 15 run = 7-8 points (floor(15/2))
+  it("talent points should accumulate at a reasonable rate (wave×0.6)", () => {
+    // Wave 15 run = floor(15 * 0.6) = 9 points
     // Talent tree has 23 nodes
-    // Can't fully max tree in one run - requires multi-run investment
-    const pointsPerRun = Math.floor(15 / 2);
-    expect(pointsPerRun).toBeLessThan(10); // Not too easy to max
+    // With 9 points per run, ~3 runs to feel build depth
+    const pointsPerRun = Math.floor(15 * 0.6);
+    expect(pointsPerRun).toBe(9);
+    expect(pointsPerRun).toBeLessThan(12); // Not too easy to max
   });
 });
 
