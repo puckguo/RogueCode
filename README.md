@@ -2,38 +2,35 @@
 
 **Your AI agent's co-pilot — entertainment that moves with your workflow.**
 
-A gamified terminal for AI coding. Spawn your AI CLI (Claude Code, aider, or any CLI tool) inside roguecode's real PTY terminal and watch it transform into an arcade — your coding activity drives the game forward; take a break and the game waits for you.
+A terminal supercharged for AI agents. Run Claude Code, aider, or any AI CLI tool in roguecode's real PTY terminal — and your entertainment flows with your agent's activity. When your agent works, things happen. When it pauses, entertainment pauses too.
 
 ## Concept
 
-roguecode is a terminal-first tool that adds an entertainment layer on top of your AI agent workflow. Your AI agent doesn't just work anymore — it coordinates entertainment with your activity.
+roguecode adds a dynamic entertainment layer on top of your AI agent workflow — without slowing you down. It's designed to make long coding sessions more engaging and keep you in flow.
 
-**The mechanic is simple:** When your agent is actively working, entertainment flows. When it goes idle for 1.5 seconds, entertainment pauses and you're locked out until it resumes.
-
-It's not about the entertainment — it's about making your work sessions more engaging.
+**The mechanic:** Your agent's activity drives entertainment. Idle for 1.5 seconds? Entertainment pauses and you're locked out until work resumes. It's a gentle nudge to keep the momentum going.
 
 ## Features
 
 ### Core Terminal
 
 - **Real PTY terminal** via `node-pty` — full xterm.js integration, no mocks
-- **Seamless AI CLI integration** — run Claude Code, aider, or any CLI tool
-- **Split-panel UI** — adjustable terminal + game + stats layout
-- **Dark ARPG aesthetic** — ember orange accents, designed for long sessions
+- **AI CLI ready** — run Claude Code, aider, or any CLI tool natively
+- **Split-panel layout** — adjustable terminal + entertainment + stats
+- **Dark theme** — designed for long sessions, ember orange accents
 
-### Gamification Layer
+### AI Productivity
 
-- **AI activity drives gameplay** — streaming tokens advances combat
-- **Hot streak system** — rapid AI output rewards bonus damage, energy, combos
-- **Idle lockout** — 1.5s AI idle freezes the game and locks you out until you resume
-- **Visual status feedback** — STREAMING / IDLE_WAITING indicators
+- **Activity-driven entertainment** — your agent's output keeps things moving
+- **Status indicators** — STREAMING / IDLE_WAITING so you always know what's happening
+- **Idle detection** — 1.5s timeout pauses entertainment, keeps you focused
+- **Session memory** — progress saved locally, pick up where you left off
 
-### Progression (激励系统)
+### Extras
 
-- **Diablo-style loot** — 5 tiers (Common → Legendary) with random affixes
-- **Grim Dawn talent tree** — persistent upgrades saved to localStorage
-- **Boss fights** — every 5 waves / **Elite enemies** — every 3 waves
-- **Multiple game modes** — Cards (deckbuilding), Arena (survival), Browser (stats)
+- **Entertainment modes** — games, video, or just ambient visuals
+- **Progress tracking** — stats and history of your work sessions
+- **Talent system** — persistent upgrades that enhance your experience
 
 ## Requirements
 
@@ -85,10 +82,10 @@ roguecode/
 │   ├── App.tsx                # Main application component
 │   ├── styles.css             # Tailwind CSS + custom styles
 │   ├── components/
-│   │   ├── game/              # Game UI components
-│   │   │   ├── BattleStage.tsx    # Card combat view
-│   │   │   ├── ArenaStage.tsx     # Arena mode view
-│   │   │   ├── BrowserStage.tsx    # Stats/history view
+│   │   ├── game/              # Entertainment UI components
+│   │   │   ├── BattleStage.tsx    # Combat view
+│   │   │   ├── ArenaStage.tsx     # Arena mode
+│   │   │   ├── BrowserStage.tsx    # Stats/history
 │   │   │   ├── CliTerminal.tsx     # PTY terminal wrapper
 │   │   │   └── sidepanel/          # Side panels
 │   │   └── ui/                 # UI primitives
@@ -120,7 +117,7 @@ roguecode/
 | File | Purpose |
 |------|---------|
 | `electron/main.cjs` | PTY spawning, HTTP server, IPC handlers |
-| `src/game/store.ts` | Zustand store with game state + sessions |
+| `src/game/store.ts` | Zustand store with state + sessions |
 | `src/components/game/CliTerminal.tsx` | xterm.js integration |
 
 ## Package for Distribution
@@ -173,11 +170,11 @@ These are harmless. The app runs fine. Use `--disable-gpu` flag if needed.
 
 ### Idle Detection Logic
 
-The PTY monitor tracks bytes per 400ms window. When AI output exceeds 80 bytes in a window and no user input for 1.5s, status changes to `STREAMING`. When AI stops for 1.5s, status changes to `IDLE_WAITING` and game pauses.
+The PTY monitor tracks bytes per 400ms window. When AI output exceeds 80 bytes in a window and no user input for 1.5s, status changes to `STREAMING`. When AI stops for 1.5s, status changes to `IDLE_WAITING` and entertainment pauses.
 
 ### Debug Mode
 
-Enable debug mode to run the game without requiring an active CLI session. Useful for testing UI changes.
+Enable debug mode to run entertainment without requiring an active CLI session. Useful for testing UI changes.
 
 ## API Reference
 
@@ -196,9 +193,9 @@ Enable debug mode to run the game without requiring an active CLI session. Usefu
 | Channel | Purpose |
 |---------|---------|
 | `storage:dir` | Get data directory path |
-| `storage:list` | List saved games |
-| `storage:read` | Load game data |
-| `storage:write` | Save game data |
+| `storage:list` | List saved sessions |
+| `storage:read` | Load session data |
+| `storage:write` | Save session data |
 
 ## Contributing
 
