@@ -1,6 +1,6 @@
 # roguecode
 
-<video src="resources/demo_1.mp4" controls></video>
+[**▶ Watch Demo Video**](resources/demo_1.mp4)
 
 **Your AI agent's co-pilot — entertainment that moves with your workflow.**
 
