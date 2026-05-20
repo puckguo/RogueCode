@@ -1,6 +1,6 @@
 # roguecode
 
-[**▶ Watch Demo Video**](resources/demo_1.mp4)
+![Demo](resources/demo.gif)
 
 **Your AI agent's co-pilot — entertainment that moves with your workflow.**
 
