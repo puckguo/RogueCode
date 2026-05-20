@@ -1,5 +1,7 @@
 # roguecode
 
+<video src="resources/demo_1.mp4" controls></video>
+
 **Your AI agent's co-pilot — entertainment that moves with your workflow.**
 
 A terminal supercharged for AI agents. Run Claude Code, aider, or any AI CLI tool in roguecode's real PTY terminal — and your entertainment flows with your agent's activity. When your agent works, things happen. When it pauses, entertainment pauses too.
