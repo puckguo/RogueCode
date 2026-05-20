@@ -92,7 +92,7 @@ export function CardsSidePanel() {
 
       <RewardModals />
       <RunSummaryModal />
+      <RelicToast />
     </div>
-    <RelicToast />
   );
 }

@@ -2,7 +2,7 @@
   "appId": "com.roguecode.app",
   "productName": "roguecode",
   "directories": {
-    "output": "electron-release"
+    "output": "electron-release-new"
   },
   "files": [
     "dist/client/**/*",
@@ -18,6 +18,7 @@
   "win": {
     "target": "portable"
   },
+  "npmRebuild": false,
   "extraMetadata": {
     "main": "electron/main.cjs"
   }
