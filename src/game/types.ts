@@ -6,6 +6,8 @@ export type CliSession = {
   status: CliStatus;
   hasStarted: boolean;     // true once user has spawned this PTY at least once
   lastActivityTs: number;  // ms since epoch — last time we saw STREAMING
+  command: string;         // shell command (e.g. "claude")
+  cwd: string;             // working directory for this session
 };
 
 // =====================================================================

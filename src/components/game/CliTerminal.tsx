@@ -28,6 +28,8 @@ export function CliTerminal() {
     setActiveSession,
     renameSession,
     updateSessionStatus,
+    updateSessionCommand,
+    updateSessionCwd,
     appendCliOutput,
     setTokensPerSec,
     tick,
@@ -39,24 +41,12 @@ export function CliTerminal() {
   const [error, setError] = useState<string | null>(null);
   const [tickN, setTickN] = useState(0); // re-render for running flag etc.
   const [editingId, setEditingId] = useState<string | null>(null);
-  // Controlled inputs for command/cwd (activeBundle is a ref, not React state)
-  const [cmd, setCmd] = useState("claude");
-  const [cwd, setCwd] = useState("");
 
   // Game tick (keep at the component level so it survives session switches).
   useEffect(() => {
     const id = window.setInterval(() => tick(), 200);
     return () => clearInterval(id);
   }, [tick]);
-
-  // Sync cmd/cwd state with activeBundle when session changes
-  useEffect(() => {
-    const b = activeSessionId ? bundlesRef.current.get(activeSessionId) : undefined;
-    if (b) {
-      setCmd(b.command);
-      setCwd(b.cwd);
-    }
-  }, [activeSessionId]);
 
   useEffect(() => {
     if (isElectron && cq) cq.listShells().then(setShells).catch(() => {});
@@ -193,9 +183,12 @@ export function CliTerminal() {
 
   async function start() {
     setError(null);
-    if (!cq || !activeSessionId) { setError("Open this app in Electron to spawn a PTY."); return; }
+    if (!cq || !activeSessionId || !activeSession) { setError("Open this app in Electron to spawn a PTY."); return; }
     const b = bundlesRef.current.get(activeSessionId);
     if (!b) return;
+    // Sync command/cwd from store to bundle before spawning
+    b.command = activeSession.command;
+    b.cwd = activeSession.cwd;
     const res = await cq.spawn({
       command: b.command, cols: b.term.cols, rows: b.term.rows,
       cwd: b.cwd || undefined,
@@ -299,11 +292,8 @@ export function CliTerminal() {
         <div className="ml-auto flex items-center gap-1">
           <input
             list="cq-shells"
-            value={cmd}
-            onChange={(e) => {
-              setCmd(e.target.value);
-              if (activeBundle) { activeBundle.command = e.target.value; setTickN((n) => n + 1); }
-            }}
+            value={activeSession?.command ?? "claude"}
+            onChange={(e) => { if (activeSessionId) { updateSessionCommand(activeSessionId, e.target.value); } }}
             disabled={activeBundle?.running}
             placeholder="claude"
             className="w-28 rounded border border-border bg-input px-2 py-1 font-mono text-[11px] outline-none disabled:opacity-50"
@@ -312,20 +302,17 @@ export function CliTerminal() {
             {shells.map((s) => <option key={s} value={s} />)}
           </datalist>
           <input
-            value={cwd}
-            onChange={(e) => {
-              setCwd(e.target.value);
-              if (activeBundle) { activeBundle.cwd = e.target.value; setTickN((n) => n + 1); }
-            }}
+            value={activeSession?.cwd ?? ""}
+            onChange={(e) => { if (activeSessionId) { updateSessionCwd(activeSessionId, e.target.value); } }}
             disabled={activeBundle?.running}
             placeholder="cwd"
             className="w-32 rounded border border-border bg-input px-2 py-1 font-mono text-[11px] outline-none disabled:opacity-50"
           />
           <button
             onClick={async () => {
-              if (!cq || !activeBundle) return;
+              if (!cq || !activeSessionId) return;
               const folder = await cq.pickFolder();
-              if (folder) { setCwd(folder); activeBundle.cwd = folder; setTickN((n) => n + 1); }
+              if (folder) { updateSessionCwd(activeSessionId, folder); }
             }}
             disabled={activeBundle?.running}
             className="rounded border border-border bg-secondary px-2 py-1 text-[11px] text-secondary-foreground hover:bg-secondary/80 disabled:opacity-50"

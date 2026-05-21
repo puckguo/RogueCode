@@ -146,6 +146,8 @@ type State = {
   setActiveSession: (id: string) => void;
   renameSession: (id: string, label: string) => void;
   updateSessionStatus: (id: string, status: CliStatus, hasStarted?: boolean) => void;
+  updateSessionCommand: (id: string, command: string) => void;
+  updateSessionCwd: (id: string, cwd: string) => void;
 
   startRun: () => void;
   endRun: () => void;
@@ -266,7 +268,7 @@ export const useGame = create<State>()((set, get) => {
     relics: save.relics,
     relicDropToast: null,
 
-    sessions: [{ id: "cli_1", label: "CLI 1", status: "IDLE_WAITING", hasStarted: false, lastActivityTs: 0 }],
+    sessions: [{ id: "cli_1", label: "CLI 1", status: "IDLE_WAITING", hasStarted: false, lastActivityTs: 0, command: "claude", cwd: "" }],
     activeSessionId: "cli_1",
 
     debugMode: false,
@@ -283,7 +285,7 @@ export const useGame = create<State>()((set, get) => {
       const s = get();
       const n = s.sessions.length + 1;
       const id = `cli_${Date.now().toString(36)}`;
-      const sess: CliSession = { id, label: label || `CLI ${n}`, status: "IDLE_WAITING", hasStarted: false, lastActivityTs: 0 };
+      const sess: CliSession = { id, label: label || `CLI ${n}`, status: "IDLE_WAITING", hasStarted: false, lastActivityTs: 0, command: "claude", cwd: "" };
       set({ sessions: [...s.sessions, sess], activeSessionId: id });
       return id;
     },
@@ -291,7 +293,7 @@ export const useGame = create<State>()((set, get) => {
       const s = get();
       const next = s.sessions.filter((x) => x.id !== id);
       const active = s.activeSessionId === id ? next[0]?.id ?? null : s.activeSessionId;
-      set({ sessions: next.length ? next : [{ id: "cli_1", label: "CLI 1", status: "IDLE_WAITING", hasStarted: false, lastActivityTs: 0 }], activeSessionId: active ?? "cli_1" });
+      set({ sessions: next.length ? next : [{ id: "cli_1", label: "CLI 1", status: "IDLE_WAITING", hasStarted: false, lastActivityTs: 0, command: "claude", cwd: "" }], activeSessionId: active ?? "cli_1" });
     },
     setActiveSession: (id: string) => {
       const s = get();
@@ -318,6 +320,12 @@ export const useGame = create<State>()((set, get) => {
       const patch: Partial<State> = { sessions };
       if (s.activeSessionId === id) patch.cliStatus = status;
       set(patch as any);
+    },
+    updateSessionCommand: (id: string, command: string) => {
+      set({ sessions: get().sessions.map((x) => x.id === id ? { ...x, command } : x) });
+    },
+    updateSessionCwd: (id: string, cwd: string) => {
+      set({ sessions: get().sessions.map((x) => x.id === id ? { ...x, cwd } : x) });
     },
 
     setMythicLevel: (n: number) => {
