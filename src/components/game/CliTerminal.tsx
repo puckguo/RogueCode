@@ -39,12 +39,24 @@ export function CliTerminal() {
   const [error, setError] = useState<string | null>(null);
   const [tickN, setTickN] = useState(0); // re-render for running flag etc.
   const [editingId, setEditingId] = useState<string | null>(null);
+  // Controlled inputs for command/cwd (activeBundle is a ref, not React state)
+  const [cmd, setCmd] = useState("claude");
+  const [cwd, setCwd] = useState("");
 
   // Game tick (keep at the component level so it survives session switches).
   useEffect(() => {
     const id = window.setInterval(() => tick(), 200);
     return () => clearInterval(id);
   }, [tick]);
+
+  // Sync cmd/cwd state with activeBundle when session changes
+  useEffect(() => {
+    const b = activeSessionId ? bundlesRef.current.get(activeSessionId) : undefined;
+    if (b) {
+      setCmd(b.command);
+      setCwd(b.cwd);
+    }
+  }, [activeSessionId]);
 
   useEffect(() => {
     if (isElectron && cq) cq.listShells().then(setShells).catch(() => {});
@@ -287,8 +299,11 @@ export function CliTerminal() {
         <div className="ml-auto flex items-center gap-1">
           <input
             list="cq-shells"
-            value={activeBundle?.command ?? "claude"}
-            onChange={(e) => { if (activeBundle) { activeBundle.command = e.target.value; setTickN((n) => n + 1); } }}
+            value={cmd}
+            onChange={(e) => {
+              setCmd(e.target.value);
+              if (activeBundle) { activeBundle.command = e.target.value; setTickN((n) => n + 1); }
+            }}
             disabled={activeBundle?.running}
             placeholder="claude"
             className="w-28 rounded border border-border bg-input px-2 py-1 font-mono text-[11px] outline-none disabled:opacity-50"
@@ -297,8 +312,11 @@ export function CliTerminal() {
             {shells.map((s) => <option key={s} value={s} />)}
           </datalist>
           <input
-            value={activeBundle?.cwd ?? ""}
-            onChange={(e) => { if (activeBundle) { activeBundle.cwd = e.target.value; setTickN((n) => n + 1); } }}
+            value={cwd}
+            onChange={(e) => {
+              setCwd(e.target.value);
+              if (activeBundle) { activeBundle.cwd = e.target.value; setTickN((n) => n + 1); }
+            }}
             disabled={activeBundle?.running}
             placeholder="cwd"
             className="w-32 rounded border border-border bg-input px-2 py-1 font-mono text-[11px] outline-none disabled:opacity-50"
@@ -307,7 +325,7 @@ export function CliTerminal() {
             onClick={async () => {
               if (!cq || !activeBundle) return;
               const folder = await cq.pickFolder();
-              if (folder) { activeBundle.cwd = folder; setTickN((n) => n + 1); }
+              if (folder) { setCwd(folder); activeBundle.cwd = folder; setTickN((n) => n + 1); }
             }}
             disabled={activeBundle?.running}
             className="rounded border border-border bg-secondary px-2 py-1 text-[11px] text-secondary-foreground hover:bg-secondary/80 disabled:opacity-50"
