@@ -5,7 +5,11 @@
     "output": "electron-release-new"
   },
   "files": [
-    "dist/client/**/*",
+    {
+      "from": "dist/client",
+      "to": "client",
+      "filter": ["**/*"]
+    },
     "electron/**/*",
     "node_modules/node-pty/**/*",
     "node_modules/nan/**/*",
