@@ -41,6 +41,8 @@ export function CliTerminal() {
   const [error, setError] = useState<string | null>(null);
   const [tickN, setTickN] = useState(0); // re-render for running flag etc.
   const [editingId, setEditingId] = useState<string | null>(null);
+  // Track previous activeSessionId to only call focus() on actual switch, not every tick
+  const prevActiveSessionRef = useRef<string | null>(null);
 
   // Game tick (keep at the component level so it survives session switches).
   useEffect(() => {
@@ -115,13 +117,14 @@ export function CliTerminal() {
         }
       }
 
-      // Toggle visibility based on activeSessionId
+      // Toggle visibility based on activeSessionId — only focus on actual session switch
       for (const [id, b] of bundlesRef.current.entries()) {
         b.el.style.display = id === activeSessionId ? "block" : "none";
-        if (id === activeSessionId) {
+        if (id === activeSessionId && prevActiveSessionRef.current !== activeSessionId) {
           try { b.fit.fit(); b.term.focus(); } catch {}
         }
       }
+      prevActiveSessionRef.current = activeSessionId;
     }
 
     void ensureBundles();
